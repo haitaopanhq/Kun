@@ -63,5 +63,6 @@ export type ServerRuntime = {
   nowIso: () => string
   info(): RuntimeInfoResponse
   toolDiagnostics?(): RuntimeToolDiagnostics | Promise<RuntimeToolDiagnostics>
+  skills?(): SkillRuntimeDiagnostics | Promise<SkillRuntimeDiagnostics>
   shutdown?(): Promise<void>
 }

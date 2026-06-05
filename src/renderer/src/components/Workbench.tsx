@@ -7,7 +7,7 @@ import { DEFAULT_COMPOSER_MODEL_IDS } from '@shared/default-composer-models'
 import { buildGuiPlanId, buildPlanRelativePath } from '@shared/gui-plan'
 import type { ClipboardImageReadResult } from '@shared/workspace-file'
 import type { AttachmentReference, ChatBlock } from '../agent/types'
-import type { CoreRuntimeInfoJson } from '../agent/kun-contract'
+import type { CoreRuntimeInfoJson, CoreRuntimeSkillJson } from '../agent/kun-contract'
 import { getProvider } from '../agent/registry'
 import { useChatStore } from '../store/chat-store'
 import { isClawThread } from '../store/chat-store-helpers'
@@ -249,6 +249,7 @@ export function Workbench(): ReactElement {
   const [composerReasoningEffort, setComposerReasoningEffort] =
     useState<ComposerReasoningEffort>('max')
   const [runtimeInfo, setRuntimeInfo] = useState<CoreRuntimeInfoJson | null>(null)
+  const [runtimeSkills, setRuntimeSkills] = useState<CoreRuntimeSkillJson[]>([])
   const [composerAttachments, setComposerAttachments] = useState<AttachmentReference[]>([])
   const [attachmentUploadBusy, setAttachmentUploadBusy] = useState(false)
   const [attachmentUploadError, setAttachmentUploadError] = useState<string | null>(null)
@@ -443,16 +444,25 @@ export function Workbench(): ReactElement {
     let cancelled = false
     if (runtimeConnection !== 'ready') {
       setRuntimeInfo(null)
+      setRuntimeSkills([])
       return
     }
     const provider = getProvider()
-    if (typeof provider.getRuntimeInfo !== 'function') return
-    void provider.getRuntimeInfo()
-      .then((info) => {
-        if (!cancelled) setRuntimeInfo(info)
+    if (typeof provider.getRuntimeInfo !== 'function' && typeof provider.listSkills !== 'function') return
+    void Promise.allSettled([
+      provider.getRuntimeInfo ? provider.getRuntimeInfo() : Promise.resolve(null),
+      provider.listSkills ? provider.listSkills() : Promise.resolve([])
+    ])
+      .then(([runtimeResult, skillsResult]) => {
+        if (cancelled) return
+        setRuntimeInfo(runtimeResult.status === 'fulfilled' ? runtimeResult.value : null)
+        setRuntimeSkills(skillsResult.status === 'fulfilled' ? skillsResult.value : [])
       })
       .catch(() => {
-        if (!cancelled) setRuntimeInfo(null)
+        if (!cancelled) {
+          setRuntimeInfo(null)
+          setRuntimeSkills([])
+        }
       })
     return () => {
       cancelled = true
@@ -1375,6 +1385,7 @@ export function Workbench(): ReactElement {
                 attachmentUploadBusy={attachmentUploadBusy}
                 attachmentUploadError={attachmentUploadError}
                 webAccessAvailable={webAccessAvailable}
+                skillCommands={runtimeSkills}
                 onPickAttachments={(files) => void handlePickAttachments(files)}
                 onPasteClipboardImage={(options) => void handlePasteClipboardImage(options)}
                 onRemoveAttachment={removeComposerAttachment}

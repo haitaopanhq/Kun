@@ -353,6 +353,7 @@ export async function createKunServeRuntime(
         ? await memoryStore.diagnostics()
         : { enabled: false, rootDir: '', activeCount: 0, tombstoneCount: 0, lastInjectedIds: [] }
     }),
+    skills: () => skillRuntime.diagnostics(),
     shutdown: async () => {
       try {
         await mcpProviders.close()

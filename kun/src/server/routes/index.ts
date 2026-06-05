@@ -29,6 +29,7 @@ import { resolveUserInput } from './user-inputs.js'
 import { resumeSession } from './sessions.js'
 import { usageJsonResponse } from './usage.js'
 import { runtimeInfoJsonResponse, runtimeToolDiagnosticsJsonResponse } from './runtime-info.js'
+import { listSkills } from './skills.js'
 import {
   attachmentDiagnostics,
   getAttachmentContent,
@@ -51,6 +52,7 @@ import type { ServerRuntime } from './server-runtime.js'
  * - `GET /health` (unauthenticated)
  * - `GET /v1/runtime/info` (auth)
  * - `GET /v1/runtime/tools` (auth)
+ * - `GET /v1/skills` (auth)
  * - `POST /v1/attachments` (auth)
  * - `GET /v1/attachments/diagnostics` (auth)
  * - `GET /v1/attachments/{id}` and `{id}/content` (auth)
@@ -83,6 +85,10 @@ export function buildRouter(runtime: ServerRuntime): Router {
   router.add('GET', '/v1/runtime/tools', async (request) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
     return runtimeToolDiagnosticsJsonResponse(runtime)
+  })
+  router.add('GET', '/v1/skills', async (request) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    return listSkills(runtime)
   })
   router.add('POST', '/v1/attachments', async (request) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()

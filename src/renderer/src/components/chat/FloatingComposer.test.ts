@@ -263,6 +263,45 @@ describe('FloatingComposer capability controls', () => {
     expect(planButton).not.toContain('disabled=""')
   })
 
+  it('shows discovered Skills in the slash command menu', () => {
+    useChatStore.setState({
+      activeThreadId: 'thr_1',
+      activeThreadGoal: null,
+      route: 'chat',
+      workspaceRoot: '/workspace/deepseek-gui'
+    })
+
+    const html = renderToStaticMarkup(
+      createElement(FloatingComposer, {
+        input: '/rev',
+        setInput: () => undefined,
+        mode: 'agent',
+        setMode: () => undefined,
+        busy: false,
+        runtimeReady: true,
+        hasActiveThread: true,
+        composerModel: '',
+        composerPickList: [],
+        onComposerModelChange: () => undefined,
+        queuedMessages: [],
+        onRemoveQueuedMessage: () => undefined,
+        onSend: () => undefined,
+        onInterrupt: () => undefined,
+        attachmentUploadEnabled: false,
+        webAccessAvailable: false,
+        skillCommands: [{
+          id: 'review',
+          name: 'Review',
+          description: 'Review the current change'
+        }]
+      })
+    )
+
+    expect(html).toContain('Review')
+    expect(html).toContain('Review the current change')
+    expect(html).toContain('/skill:review')
+  })
+
   it('enables local Claw input when a WeChat channel is already mapped to a local thread', () => {
     useChatStore.setState({
       activeThreadId: 'thr_weixin',

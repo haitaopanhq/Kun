@@ -32,6 +32,27 @@ describe('AgentLoop', () => {
     expect(h.inflight.size()).toBe(0)
   })
 
+  it('injects the current shell runtime when bash is available', async () => {
+    let observedRequest: ModelRequest | null = null
+    const h = makeHarness({
+      provider: 'shell-context',
+      model: 'shell-context',
+      async *stream(request: ModelRequest): AsyncIterable<ModelStreamChunk> {
+        observedRequest = request
+        yield { kind: 'completed', stopReason: 'stop' }
+      }
+    })
+    await bootstrapThread(h)
+
+    await h.loop.runTurn(h.threadId, h.turnId)
+
+    const request = observedRequest as ModelRequest | null
+    if (!request) throw new Error('expected model request')
+    expect(request.tools.map((tool) => tool.name)).toContain('bash')
+    expect(request.contextInstructions?.join('\n')).toContain('Shell runtime:')
+    expect(request.contextInstructions?.join('\n')).toContain('shell commands appropriate for the host platform')
+  })
+
   it('records elapsed seconds for active goals after a turn finishes', async () => {
     let nowMs = 1_000
     const h = makeHarness(

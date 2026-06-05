@@ -23,6 +23,8 @@ describe('SkillRuntime', () => {
   it('loads manifests, legacy SKILL.md packages, and validation diagnostics', async () => {
     await writeSkill('review', {
       name: 'Review Skill',
+      description: 'Review changes in the current workspace',
+      version: '1.0.0',
       entry: 'REVIEW.md',
       triggers: { commands: ['/review'] }
     }, 'Review instructions')
@@ -35,6 +37,10 @@ describe('SkillRuntime', () => {
     const diagnostics = runtime.diagnostics()
 
     expect(diagnostics.skills.map((skill) => skill.id).sort()).toEqual(['legacy', 'review-skill'])
+    expect(diagnostics.skills.find((skill) => skill.id === 'review-skill')).toMatchObject({
+      description: 'Review changes in the current workspace',
+      version: '1.0.0'
+    })
     expect(diagnostics.skills.find((skill) => skill.id === 'legacy')?.legacy).toBe(true)
     expect(diagnostics.validationErrors[0]?.message).toMatch(/expected string/i)
   })

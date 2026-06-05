@@ -168,6 +168,42 @@ describe('HTTP server', () => {
     expect(response.status).toBe(401)
   })
 
+  it('lists discovered skills through the HTTP layer', async () => {
+    const h = buildHarness()
+    h.runtime.skills = () => ({
+      enabled: true,
+      roots: ['/tmp/skills'],
+      skills: [
+        {
+          id: 'review',
+          name: 'Review',
+          description: 'Review the current change',
+          version: '1.0.0',
+          root: '/tmp/skills/review',
+          legacy: false,
+          triggers: { commands: ['/review'], promptPatterns: [], fileTypes: [] },
+          allowedTools: ['read']
+        }
+      ],
+      validationErrors: [],
+      lastActivations: []
+    })
+
+    const response = await dispatchRequest(
+      h.router,
+      new Request('http://localhost/v1/skills', {
+        headers: { authorization: 'Bearer tok-1' }
+      })
+    )
+
+    expect(response.status).toBe(200)
+    const body = await readJson(response) as { skills: Array<{ id: string; description?: string }> }
+    expect(body.skills[0]).toMatchObject({
+      id: 'review',
+      description: 'Review the current change'
+    })
+  })
+
   it('returns the real user message item id when starting a turn', async () => {
     const h = buildHarness()
     await h.threadService.create({

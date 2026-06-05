@@ -4,6 +4,7 @@ import type {
   CoreAttachmentTextFallbackJson,
   CoreMemoryRecordJson,
   CoreRuntimeInfoJson,
+  CoreRuntimeSkillJson,
   CoreRuntimeToolDiagnosticsJson
 } from './kun-contract'
 
@@ -411,6 +412,7 @@ export interface AgentProvider {
   ): Promise<{ turnId: string; threadId: string; userMessageItemId?: string; reviewItemId?: string }>
   getRuntimeInfo?(): Promise<CoreRuntimeInfoJson>
   getToolDiagnostics?(): Promise<CoreRuntimeToolDiagnosticsJson>
+  listSkills?(): Promise<CoreRuntimeSkillJson[]>
   uploadAttachment?(input: {
     name: string
     mimeType?: string

@@ -16,6 +16,7 @@ import {
   KUN_MEMORY_PATH,
   KUN_RUNTIME_INFO_PATH,
   KUN_RUNTIME_TOOLS_PATH,
+  KUN_SKILLS_PATH,
   kunApprovalPath,
   kunThreadCompactPath,
   kunThreadEventsPath,
@@ -47,6 +48,8 @@ import type {
   CoreResumeSessionResponseJson,
   CoreRuntimeInfoJson,
   CoreRuntimeEventJson,
+  CoreRuntimeSkillJson,
+  CoreRuntimeSkillsResponseJson,
   CoreRuntimeToolDiagnosticsJson,
   CoreStartReviewResponseJson,
   CoreClearThreadGoalResponseJson,
@@ -529,6 +532,17 @@ export class KunRuntimeProvider implements AgentProvider {
       response.body,
       'runtime returned an invalid runtime diagnostics response'
     )
+  }
+
+  async listSkills(): Promise<CoreRuntimeSkillJson[]> {
+    const response = await rendererRuntimeClient.runtimeRequest(KUN_SKILLS_PATH, 'GET')
+    if (!response.ok) {
+      throw runtimeErrorToError(readRuntimeError(response.body, 'failed to list skills'))
+    }
+    return readRuntimeJson<CoreRuntimeSkillsResponseJson>(
+      response.body,
+      'runtime returned an invalid skills response'
+    ).skills ?? []
   }
 
   async uploadAttachment(input: {

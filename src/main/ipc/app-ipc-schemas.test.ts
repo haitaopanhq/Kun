@@ -44,6 +44,15 @@ describe('app-ipc-schemas', () => {
     expect(payload.path).toBe('/v1/runtime/tools')
   })
 
+  it('accepts the Kun skills endpoint', () => {
+    const payload = runtimeRequestPayloadSchema.parse({
+      path: '/v1/skills',
+      method: 'GET'
+    })
+
+    expect(payload.path).toBe('/v1/skills')
+  })
+
   it('accepts Kun attachment and memory endpoints', () => {
     expect(runtimeRequestPayloadSchema.parse({
       path: '/v1/attachments',

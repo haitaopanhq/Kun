@@ -25,6 +25,7 @@ import {
   RotateCcw,
   SearchCode,
   Send,
+  Sparkles,
   Square,
   Target,
   Trash2,
@@ -90,6 +91,17 @@ type Props = {
   attachmentUploadBusy?: boolean
   attachmentUploadError?: string | null
   webAccessAvailable?: boolean
+  skillCommands?: Array<{
+    id: string
+    name: string
+    description?: string
+    legacy?: boolean
+    triggers?: {
+      commands?: string[]
+      fileTypes?: string[]
+      promptPatterns?: string[]
+    }
+  }>
   onPickAttachments?: (files: File[]) => void
   onPasteClipboardImage?: (options?: { silentNoImage?: boolean }) => void | Promise<void>
   onRemoveAttachment?: (id: string) => void
@@ -231,6 +243,7 @@ export function FloatingComposer({
   attachmentUploadEnabled = false,
   attachmentUploadBusy = false,
   attachmentUploadError = null,
+  skillCommands = [],
   onPickAttachments,
   onPasteClipboardImage,
   onRemoveAttachment,
@@ -360,6 +373,30 @@ export function FloatingComposer({
     }
 
     if (route !== 'claw') {
+      const dynamicSkillCommands = skillCommands
+        .filter((skill) => skill.id.trim() && skill.name.trim())
+        .slice(0, 40)
+        .map<SlashCommand>((skill) => {
+          const prompt = `/skill:${skill.id} `
+          const triggers = [
+            ...(skill.triggers?.commands ?? []),
+            ...(skill.triggers?.fileTypes ?? []),
+            ...(skill.triggers?.promptPatterns ?? [])
+          ]
+          return {
+            id: `skill:${skill.id}`,
+            kind: 'skill',
+            title: skill.name,
+            description: skill.description?.trim() || t('slashSkillDescriptionFallback'),
+            keywords: [skill.id, skill.name, 'skill', '技能', ...triggers],
+            icon: <Sparkles className="h-4 w-4" strokeWidth={1.9} />,
+            badge: prompt.trim(),
+            skillPrompt: prompt,
+            disabled: !runtimeReady
+          }
+        })
+      commands.push(...dynamicSkillCommands)
+
       commands.push({
         id: 'goal',
         title: t('slashCommandGoalTitle'),
@@ -446,6 +483,7 @@ export function FloatingComposer({
     onReviewCommand,
     route,
     runtimeReady,
+    skillCommands,
     t
   ])
 
@@ -552,6 +590,14 @@ export function FloatingComposer({
   }, [busy, activeThreadGoal?.createdAt, activeThreadGoal?.objective, activeThreadGoal?.status])
 
   const applySlashCommand = (commandId: SlashCommandId): void => {
+    if (commandId.startsWith('skill:')) {
+      const command = slashCommands.find((item) => item.id === commandId)
+      if (command?.skillPrompt) {
+        setInput(command.skillPrompt)
+        draft.focusComposer()
+      }
+      return
+    }
     if (commandId === 'plan') {
       setInput('')
       setMode('plan')
@@ -953,7 +999,7 @@ export function FloatingComposer({
                       </span>
                       <span className="flex shrink-0 flex-col items-end gap-1">
                         <span className="rounded-full border border-ds-border-muted px-2.5 py-1 text-[11px] font-semibold text-ds-faint">
-                          /{command.id}
+                          {command.badge ?? `/${command.id}`}
                         </span>
                       </span>
                     </button>

@@ -670,6 +670,7 @@
   "slashCommandRestoreDescription": "把归档会话恢复到活跃列表。",
   "slashCommandBtwTitle": "顺便问一下…",
   "slashCommandBtwDescription": "开一个继承当前会话上下文的旁支对话，主线无需切换。",
+  "slashSkillDescriptionFallback": "为下一条消息加载这个 Skill。",
   "turnModelBadgeTitle": "本回合使用模型：{{model}}",
   "sidePanelTitle": "旁支对话",
   "sidePanelParentLabel": "来自 “{{title}}”",

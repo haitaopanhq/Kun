@@ -53,6 +53,7 @@ import { createWriteTool as createWriteToolFromModule } from '../src/adapters/to
 import { computeEditDiff } from '../src/adapters/tool/edit-diff.js'
 import { withFileMutationQueue } from '../src/adapters/tool/file-mutation-queue.js'
 import { DEFAULT_MAX_BYTES } from '../src/adapters/tool/truncate.js'
+import type { TurnItem } from '../src/contracts/items.js'
 import type { FsStats } from '../src/adapters/tool/builtin-tool-types.js'
 import type { ToolHostContext } from '../src/ports/tool-host.js'
 
@@ -328,6 +329,29 @@ describe('Kun built-in tools', () => {
     expect(typeof output.shell).toBe('string')
     expect(String(output.output)).toContain('from bash')
     expect(output.truncation).toBe(null)
+  })
+
+  it('includes the active shell in bash partial updates', async () => {
+    const updates: TurnItem[] = []
+    const result = await host.execute(
+      {
+        callId: 'call_bash_partial',
+        toolName: 'bash',
+        arguments: {
+          command: 'node -e "process.stdout.write(\'partial-shell\')"'
+        }
+      },
+      buildContext(workspace),
+      (item) => {
+        updates.push(item)
+      }
+    )
+
+    expect(result.item.kind).toBe('tool_result')
+    const partial = updates.find((item) => item.kind === 'tool_result')
+    expect(partial?.kind === 'tool_result' ? (partial.output as { shell?: string }).shell : undefined).toEqual(
+      expect.any(String)
+    )
   })
 
   it('rejects file paths outside the workspace root', async () => {
