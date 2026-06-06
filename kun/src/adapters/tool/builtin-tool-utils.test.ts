@@ -1,5 +1,5 @@
 import { statSync } from 'node:fs'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   makeListEntry,
   normalizeToolPath,
@@ -7,7 +7,8 @@ import {
   shellConfig,
   shellDisplayName,
   shellRuntimeInfo,
-  shellRuntimeInstruction
+  shellRuntimeInstruction,
+  terminateSpawnTree
 } from './builtin-tool-utils.js'
 
 function lookup(results: Record<string, string>) {
@@ -101,6 +102,41 @@ describe('shell runtime metadata', () => {
     })
     expect(shellRuntimeInstruction({ shell: 'C:\\Program Files\\PowerShell\\7\\pwsh.exe', args: ['-Command'] }))
       .toContain('PowerShell syntax')
+  })
+})
+
+describe('terminateSpawnTree', () => {
+  it('uses taskkill to terminate process trees on Windows', () => {
+    const calls: Array<{ command: string; args: string[] }> = []
+    const child = {
+      pid: 1234,
+      kill: vi.fn()
+    }
+    const spawnImpl = vi.fn((command: string, args: string[]) => {
+      calls.push({ command, args })
+      return {
+        once: vi.fn(),
+        unref: vi.fn()
+      }
+    })
+
+    terminateSpawnTree(child as never, {
+      platform: 'win32',
+      spawnImpl: spawnImpl as never
+    })
+
+    expect(calls).toEqual([{ command: 'taskkill', args: ['/pid', '1234', '/T', '/F'] }])
+    expect(child.kill).not.toHaveBeenCalled()
+  })
+
+  it('falls back to child.kill when no pid is available', () => {
+    const child = {
+      kill: vi.fn()
+    }
+
+    terminateSpawnTree(child as never, { platform: 'win32' })
+
+    expect(child.kill).toHaveBeenCalledWith('SIGTERM')
   })
 })
 

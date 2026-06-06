@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process'
 import type { ToolCallLike, ToolHostContext } from '../../ports/tool-host.js'
+import { terminateSpawnTree } from './builtin-tool-utils.js'
 
 export type ToolHookPhase = 'PreToolUse' | 'PostToolUse'
 
@@ -127,7 +128,7 @@ async function runCommandHook(
     hook.timeoutMs ?? 5_000,
     `${hook.phase} command hook timed out`
   ).catch((error) => {
-    child.kill('SIGTERM')
+    terminateSpawnTree(child)
     throw error
   })
   if (exitCode !== 0) {

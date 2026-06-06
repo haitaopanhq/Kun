@@ -331,6 +331,58 @@ describe('Kun built-in tools', () => {
     expect(output.truncation).toBe(null)
   })
 
+  it('finishes bash commands after the shell exits even when a background child keeps stdio open', async () => {
+    const startedAt = Date.now()
+    const output = await executeTool(host, workspace, 'bash', {
+      command: 'sleep 5 & echo done',
+      timeout: 2
+    })
+
+    expect(output.exit_code).toBe(0)
+    expect(String(output.output)).toContain('done')
+    expect(Date.now() - startedAt).toBeLessThan(1500)
+  })
+
+  it('returns a pollable bash session for foreground long-running commands', async () => {
+    const startedAt = Date.now()
+    const output = await executeTool(host, workspace, 'bash', {
+      command: 'echo ready; sleep 5',
+      yield_seconds: 1,
+      timeout: 10
+    })
+
+    expect(output.exit_code).toBe(null)
+    expect(output.status).toBe('running')
+    expect(typeof output.session_id).toBe('string')
+    expect(String(output.output)).toContain('ready')
+    expect(Date.now() - startedAt).toBeLessThan(2500)
+
+    const stopped = await executeTool(host, workspace, 'bash', {
+      action: 'stop',
+      session_id: String(output.session_id)
+    })
+    expect(stopped.status).toBe('stopped')
+    expect(stopped.stop_sent).toBe(true)
+  })
+
+  it('polls completed bash sessions for final output', async () => {
+    const output = await executeTool(host, workspace, 'bash', {
+      command: 'echo ready; sleep 2; echo done',
+      yield_seconds: 1,
+      timeout: 10
+    })
+
+    expect(output.status).toBe('running')
+    await new Promise((resolve) => setTimeout(resolve, 2500))
+    const polled = await executeTool(host, workspace, 'bash', {
+      action: 'poll',
+      session_id: String(output.session_id)
+    })
+    expect(polled.status).toBe('completed')
+    expect(polled.exit_code).toBe(0)
+    expect(String(polled.output)).toContain('done')
+  })
+
   it('includes the active shell in bash partial updates', async () => {
     const updates: TurnItem[] = []
     const result = await host.execute(

@@ -140,6 +140,18 @@ const FILE_PATH_KEYS = [
 ] as const
 
 const COMMAND_KEYS = ['command', 'cmd', 'script'] as const
+const COMMAND_RESULT_META_KEYS = [
+  'exit_code',
+  'session_id',
+  'status',
+  'pid',
+  'shell',
+  'cwd',
+  'started_at',
+  'finished_at',
+  'partial',
+  'stop_sent'
+] as const
 
 const TOOL_KIND_BY_NAME: ReadonlyMap<string, ToolBlock['toolKind']> = new Map([
   ['shell', 'command_execution'],
@@ -226,6 +238,16 @@ function applyRuntimeDisclosureMeta(
 function extractToolSources(item: CoreTurnItemJson): Array<Record<string, string>> | undefined {
   const payload = payloadFor(item)
   return normalizeWebSources(payload.sources) ?? normalizeWebSources(payload.citations)
+}
+
+function applyCommandResultMeta(meta: Record<string, unknown>, item: CoreTurnItemJson): void {
+  const payload = payloadFor(item)
+  for (const key of COMMAND_RESULT_META_KEYS) {
+    const value = payload[key]
+    if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+      meta[key] = value
+    }
+  }
 }
 
 function inferToolPresentation(item: CoreTurnItemJson): {
@@ -329,6 +351,7 @@ function toolBlockFromItem(item: CoreTurnItemJson, child?: CoreChildRuntimeMetad
   if (sources) meta.sources = sources
   const presentation = inferToolPresentation(item)
   if (presentation.command) meta.command = presentation.command
+  if (presentation.toolKind === 'command_execution') applyCommandResultMeta(meta, item)
   if (isPlan) {
     const plan = extractPlanMetadata(item)
     if (plan) meta.plan = plan

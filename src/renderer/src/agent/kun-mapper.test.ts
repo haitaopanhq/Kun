@@ -830,6 +830,41 @@ describe('tool presentation inference', () => {
     })
   })
 
+  it('surfaces bash session metadata on command blocks', () => {
+    const block = chatBlockFromItem({
+      id: 'item_bash_session',
+      turnId: 'turn_1',
+      threadId: 'thr_1',
+      role: 'tool',
+      status: 'completed',
+      createdAt: '2024-01-01T00:00:00.000Z',
+      kind: 'tool_result',
+      toolName: 'bash',
+      toolKind: 'command_execution',
+      callId: 'call_bash',
+      output: {
+        command: 'npm run dev',
+        session_id: 'bash_abc123',
+        status: 'running',
+        pid: 1234,
+        shell: 'bash',
+        cwd: '/tmp/app'
+      }
+    })
+    expect(block).toMatchObject({
+      kind: 'tool',
+      toolKind: 'command_execution',
+      meta: {
+        command: 'npm run dev',
+        session_id: 'bash_abc123',
+        status: 'running',
+        pid: 1234,
+        shell: 'bash',
+        cwd: '/tmp/app'
+      }
+    })
+  })
+
   it('uses the explicit file_change kind and surfaces the path', () => {
     const block = chatBlockFromItem({
       id: 'item_file',
