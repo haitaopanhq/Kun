@@ -36,6 +36,7 @@ export type ThreadRecordJson = {
 export type TurnRecordJson = {
   id: string
   status?: string
+  items?: TurnItemJson[]
 }
 
 export type TurnItemJson = {
@@ -46,7 +47,9 @@ export type TurnItemJson = {
 }
 
 export type ThreadDetailJson = {
-  thread: ThreadRecordJson
+  thread?: ThreadRecordJson
+  id?: string
+  status?: string
   turns?: TurnRecordJson[]
   items?: TurnItemJson[]
 }
@@ -97,7 +100,13 @@ export function isRunningStatus(status: string | undefined): boolean {
 }
 
 export function latestAssistantText(detail: ThreadDetailJson): string {
-  const items = Array.isArray(detail.items) ? detail.items : []
+  const turnItems = Array.isArray(detail.turns)
+    ? detail.turns.flatMap((turn) => Array.isArray(turn.items) ? turn.items : [])
+    : []
+  const items = [
+    ...(Array.isArray(detail.items) ? detail.items : []),
+    ...turnItems
+  ]
   for (let index = items.length - 1; index >= 0; index -= 1) {
     const item = items[index]
     if (item.kind !== 'assistant_text' && item.kind !== 'agent_message') continue

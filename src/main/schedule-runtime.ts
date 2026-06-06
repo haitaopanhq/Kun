@@ -490,7 +490,8 @@ export class ScheduleRuntime {
       const targetTurn = Array.isArray(detail.turns)
         ? detail.turns.find((turn) => turn.id === turnId)
         : undefined
-      const threadDone = !isRunningStatus(detail.thread.status)
+      const threadStatus = detail.thread?.status ?? detail.status
+      const threadDone = threadStatus ? !isRunningStatus(threadStatus) : Boolean(lastText)
       const turnDone = targetTurn ? !isRunningStatus(targetTurn.status) : threadDone
       if (turnDone && lastText) return lastText
     }

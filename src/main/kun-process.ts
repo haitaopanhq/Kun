@@ -1,7 +1,8 @@
 import { app } from 'electron'
-import { spawn, execFile, type ChildProcess } from 'node:child_process'
+import { spawn, type ChildProcess } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { createServer } from 'node:net'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import {
@@ -37,6 +38,7 @@ import {
 } from './claw-schedule-mcp-config'
 import { defaultKunDataDir } from './runtime/kun-adapter'
 import { appendManagedLogLine } from './logger'
+import { guiSkillRootsForRuntime, normalizeSkillRootPath } from './services/skill-service'
 
 let child: ChildProcess | null = null
 let childLogCapture: KunChildLogCapture | null = null
@@ -69,13 +71,6 @@ const DEFAULT_KUN_MODEL_PROFILES: Record<string, Record<string, unknown>> = {
     supportsToolCalling: true,
     messageParts: ['text']
   }
-}
-
-type PortOwner = {
-  pid: number
-  command: string
-  parentPid: number | null
-  parentCommand: string | null
 }
 
 type KunLogStream = 'stdout' | 'stderr' | 'lifecycle'
@@ -170,28 +165,24 @@ function createKunChildLogCapture(pid: number | undefined): KunChildLogCapture {
   }
 }
 
-function execFileText(file: string, args: string[]): Promise<string> {
-  return new Promise((resolve, reject) => {
-    execFile(file, args, { encoding: 'utf8' }, (error, stdout) => {
-      if (error) {
-        reject(error)
-        return
-      }
-      resolve(stdout)
-    })
-  })
-}
-
 function appRoot(): string {
   return app.isPackaged
     ? app.getAppPath().replace(/app\.asar$/, 'app.asar.unpacked')
     : app.getAppPath()
 }
 
-function kunDataDir(runtime: { dataDir: string }): string {
+export function resolveKunDataDir(runtime: { dataDir: string }): string {
   const trimmed = runtime.dataDir?.trim()
-  if (trimmed) return trimmed.startsWith('~') ? trimmed.replace(/^~/, homedir()) : trimmed
+  if (trimmed) return expandHomePath(trimmed)
   return defaultKunDataDir()
+}
+
+function expandHomePath(path: string): string {
+  if (path === '~') return homedir()
+  if (path.startsWith('~/') || path.startsWith('~\\')) {
+    return join(homedir(), path.slice(2).replace(/\\/g, '/'))
+  }
+  return path
 }
 
 export function isKunChildRunning(): boolean {
@@ -213,7 +204,7 @@ export async function startKunChild(settings: AppSettingsV1): Promise<void> {
       `Kun runtime build is missing at ${resolution.args[0]}. Run \`npm run build:kun\` before starting the GUI.`
     )
   }
-  const dataDir = kunDataDir(runtime)
+  const dataDir = resolveKunDataDir(runtime)
   await syncGuiManagedKunConfig(dataDir, runtime, {
     settings,
     launch: {
@@ -295,8 +286,10 @@ export async function syncGuiManagedKunConfig(
   const search = objectValue(mcp.search)
   const attachments = objectValue(capabilities.attachments)
   const web = objectValue(capabilities.web)
+  const skills = objectValue(capabilities.skills)
   const storage = storageConfigForRuntime(runtime.storage)
   const mcpSearch = runtime.mcpSearch
+  const skillCapability = await skillCapabilityConfigForRuntime(skills, scheduleMcp?.settings)
   const next = {
     serve: {
       ...serve,
@@ -317,6 +310,7 @@ export async function syncGuiManagedKunConfig(
         enabled: web.enabled === false ? false : true,
         fetchEnabled: web.fetchEnabled === false ? false : true
       },
+      skills: skillCapability,
       mcp: {
         ...mcp,
         ...(scheduleMcp || mcpSearch.enabled ? { enabled: mcp.enabled === false ? false : true } : {}),
@@ -365,6 +359,39 @@ function buildGuiScheduleKunMcpServer(
     trustScope: 'user',
     timeoutMs: GUI_SCHEDULE_MCP_TIMEOUT_MS
   }
+}
+
+async function skillCapabilityConfigForRuntime(
+  existing: Record<string, unknown>,
+  settings?: AppSettingsV1
+): Promise<Record<string, unknown>> {
+  const roots = uniqueStrings([
+    ...stringArrayValue(existing.roots).map(normalizeSkillRootPath),
+    ...(await guiSkillRootsForRuntime(settings)).map((root) => root.path)
+  ])
+  return {
+    ...existing,
+    enabled: existing.enabled === false ? false : roots.length > 0 || existing.enabled === true,
+    roots,
+    legacySkillMd: existing.legacySkillMd === false ? false : true
+  }
+}
+
+function stringArrayValue(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+    : []
+}
+
+function uniqueStrings(values: string[]): string[] {
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const value of values) {
+    if (!value || seen.has(value)) continue
+    seen.add(value)
+    out.push(value)
+  }
+  return out
 }
 
 function modelConfigForRuntime(existing: Record<string, unknown>): Record<string, unknown> {
@@ -569,13 +596,28 @@ export async function reclaimKunPort(
   port: number
 ): Promise<{ ok: true } | { ok: false; message: string }> {
   if (port <= 0) return { ok: true }
-  try {
-    await execFileText('lsof', ['-ti', `:${port}`])
-    // Port has an owner; surface a soft failure so the GUI can decide.
-    return { ok: false, message: `port ${port} is in use` }
-  } catch {
-    return { ok: true }
-  }
+  const available = await canBindTcpPort(port, '127.0.0.1')
+  return available
+    ? { ok: true }
+    : { ok: false, message: `port ${port} is in use` }
+}
+
+function canBindTcpPort(port: number, host: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    let settled = false
+    const server = createServer()
+    const settle = (available: boolean): void => {
+      if (settled) return
+      settled = true
+      server.removeAllListeners('error')
+      resolve(available)
+    }
+    server.unref()
+    server.once('error', () => settle(false))
+    server.listen({ port, host, exclusive: true }, () => {
+      server.close(() => settle(true))
+    })
+  })
 }
 
 async function waitForKunStartup(startedChild: ChildProcess): Promise<void> {

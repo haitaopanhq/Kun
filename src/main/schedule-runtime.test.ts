@@ -202,6 +202,67 @@ describe('ScheduleRuntime', () => {
     })
   })
 
+  it('reads assistant text from the real Kun thread detail shape', async () => {
+    const task = makeTask()
+    const runtimeRequest = vi.fn(async (_settings, path, init) => {
+      if (path === '/v1/threads') {
+        return { ok: true, status: 200, body: JSON.stringify({ id: 'thr_1' }) }
+      }
+      if (path === '/v1/threads/thr_1' && init?.method === 'PATCH') {
+        return { ok: true, status: 200, body: '{}' }
+      }
+      if (path === '/v1/threads/thr_1/turns') {
+        return { ok: true, status: 202, body: JSON.stringify({ turnId: 'turn_1' }) }
+      }
+      if (path === '/v1/threads/thr_1' && init?.method === 'GET') {
+        return {
+          ok: true,
+          status: 200,
+          body: JSON.stringify({
+            id: 'thr_1',
+            status: 'idle',
+            turns: [
+              {
+                id: 'turn_1',
+                status: 'completed',
+                items: [{ kind: 'assistant_text', text: 'scheduled task completed' }]
+              }
+            ]
+          })
+        }
+      }
+      throw new Error(`unexpected path ${path}`)
+    })
+    const { runtime } = createRuntime(settingsWith([task]), runtimeRequest)
+
+    const result = await (runtime as unknown as {
+      runPrompt: (
+        settingsArg: AppSettingsV1,
+        options: {
+          prompt: string
+          title: string
+          workspaceRoot: string
+          model: string
+          reasoningEffort: ScheduledTaskV1['reasoningEffort']
+          mode: ScheduledTaskV1['mode']
+          waitForResult: boolean
+          responseTimeoutMs: number
+        }
+      ) => Promise<{ ok: boolean; text?: string }>
+    }).runPrompt(settingsWith([task]), {
+      prompt: 'hello',
+      title: 'demo',
+      workspaceRoot: '/tmp/workspace',
+      model: 'auto',
+      reasoningEffort: 'medium',
+      mode: 'agent',
+      waitForResult: true,
+      responseTimeoutMs: 2_000
+    })
+
+    expect(result).toMatchObject({ ok: true, text: 'scheduled task completed' })
+  })
+
   it('disables one-time tasks after monitored completion', async () => {
     const task = makeTask({
       lastStatus: 'running',

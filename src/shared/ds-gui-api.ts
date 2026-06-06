@@ -57,6 +57,18 @@ export type RuntimeRequestResult = { ok: boolean; status: number; body: string }
 export type WorkspacePickResult = { canceled: boolean; path: string | null }
 export type PathOpenResult = { ok: boolean; message?: string }
 export type SkillSaveResult = { ok: true; path: string } | { ok: false; message: string }
+export type SkillListItem = {
+  id: string
+  name: string
+  description?: string
+  root: string
+  entryPath: string
+  scope: 'project' | 'global'
+  legacy: boolean
+}
+export type SkillListResult =
+  | { ok: true; skills: SkillListItem[]; validationErrors: Array<{ root: string; message: string }> }
+  | { ok: false; message: string }
 export type DeepseekConfigFileResult = { path: string; content: string; exists: boolean }
 export type DeepseekConfigSaveResult = { ok: true; path: string }
 export type TurnCompleteNotificationPayload = {
@@ -112,6 +124,7 @@ export type DsGuiApi = {
     deviceCode: string
   ) => Promise<ClawImInstallPollResult>
   pickWorkspaceDirectory: (defaultPath?: string) => Promise<WorkspacePickResult>
+  listSkills: (workspaceRoot?: string) => Promise<SkillListResult>
   saveSkillFile: (rootPath: string, skillName: string, content: string) => Promise<SkillSaveResult>
   openSkillRoot: (rootPath: string) => Promise<PathOpenResult>
   getDeepseekConfigFile: () => Promise<DeepseekConfigFileResult>

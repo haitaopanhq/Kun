@@ -374,6 +374,19 @@ describe('KunRuntimeProvider', () => {
       if (path === '/v1/runtime/tools') {
         return { ok: true, status: 200, body: JSON.stringify({ providers: [{ id: 'web' }] }) }
       }
+      if (path === '/v1/skills') {
+        return {
+          ok: true,
+          status: 200,
+          body: JSON.stringify({
+            skills: [{
+              id: 'review',
+              name: 'Review',
+              description: 'Review changes'
+            }]
+          })
+        }
+      }
       if (path === '/v1/attachments') {
         return {
           ok: true,
@@ -420,6 +433,13 @@ describe('KunRuntimeProvider', () => {
     await expect(provider.getToolDiagnostics()).resolves.toMatchObject({
       providers: [{ id: 'web' }]
     })
+    await expect(provider.listSkills()).resolves.toEqual([
+      expect.objectContaining({
+        id: 'review',
+        name: 'Review',
+        description: 'Review changes'
+      })
+    ])
     await expect(provider.uploadAttachment({
       name: 'shot.png',
       mimeType: 'image/png',

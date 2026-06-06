@@ -60,6 +60,8 @@ export type SkillRuntimeDiagnostics = {
   skills: Array<{
     id: string
     name: string
+    description?: string
+    version: string
     root: string
     legacy: boolean
     triggers: LoadedSkill['triggers']
@@ -155,6 +157,8 @@ export class SkillRuntime {
       skills: this.skills.map((skill) => ({
         id: skill.id,
         name: skill.name,
+        ...(skill.description ? { description: skill.description } : {}),
+        version: skill.version,
         root: skill.root,
         legacy: skill.legacy,
         triggers: skill.triggers,

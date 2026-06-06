@@ -6,6 +6,7 @@ import {
   scheduleTaskFromTextPayloadSchema,
   settingsPatchSchema,
   shellOpenExternalUrlSchema,
+  skillListPayloadSchema,
   sseStartPayloadSchema,
   workspaceDirectoryCreatePayloadSchema,
   workspaceDirectoryTargetPayloadSchema,
@@ -44,6 +45,15 @@ describe('app-ipc-schemas', () => {
     expect(payload.path).toBe('/v1/runtime/tools')
   })
 
+  it('accepts the Kun skills endpoint', () => {
+    const payload = runtimeRequestPayloadSchema.parse({
+      path: '/v1/skills',
+      method: 'GET'
+    })
+
+    expect(payload.path).toBe('/v1/skills')
+  })
+
   it('accepts Kun attachment and memory endpoints', () => {
     expect(runtimeRequestPayloadSchema.parse({
       path: '/v1/attachments',
@@ -64,6 +74,13 @@ describe('app-ipc-schemas', () => {
       method: 'PATCH',
       body: '{}'
     }).path).toBe('/v1/memory/mem_1')
+  })
+
+  it('accepts skill list payloads with an optional workspace root', () => {
+    expect(skillListPayloadSchema.parse({
+      workspaceRoot: ' /tmp/workspace '
+    })).toEqual({ workspaceRoot: '/tmp/workspace' })
+    expect(skillListPayloadSchema.parse({})).toEqual({})
   })
 
   it('accepts Kun thread goal endpoints', () => {

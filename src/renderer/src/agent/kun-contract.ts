@@ -259,6 +259,29 @@ export type CoreRuntimeToolDiagnosticsJson = {
   }
 }
 
+export type CoreRuntimeSkillJson = {
+  id: string
+  name: string
+  description?: string
+  version?: string
+  root?: string
+  scope?: 'project' | 'global'
+  legacy?: boolean
+  triggers?: {
+    commands?: string[]
+    promptPatterns?: string[]
+    fileTypes?: string[]
+  }
+  allowedTools?: string[]
+}
+
+export type CoreRuntimeSkillsResponseJson = {
+  enabled?: boolean
+  roots?: string[]
+  skills?: CoreRuntimeSkillJson[]
+  validationErrors?: Array<Record<string, unknown> | string>
+}
+
 export type CoreChildRuntimeMetadataJson = {
   parentThreadId: string
   parentTurnId: string

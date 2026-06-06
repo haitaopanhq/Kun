@@ -21,6 +21,7 @@ import {
 import { readBrowserStorageItem, writeBrowserStorageItem } from '../lib/browser-storage'
 import { normalizeWorkspaceRoot } from '../lib/workspace-path'
 import { getProvider } from '../agent/registry'
+import type { SkillListItem } from '@shared/ds-gui-api'
 import type {
   CoreRuntimeInfoJson,
   CoreRuntimeToolDiagnosticsJson
@@ -42,9 +43,13 @@ type Notice = MarketplaceNotice
 type MarketplaceItem = {
   id: string
   kind: PluginKind
-  titleKey: string
-  descriptionKey: string
-  group: 'recommended'
+  titleKey?: string
+  descriptionKey?: string
+  title?: string
+  description?: string
+  group: 'recommended' | 'personal'
+  sourceLabel?: string
+  statusTone?: 'default' | 'success' | 'warning' | 'error'
   systemManaged?: boolean
   mcpConfig?: (workspaceRoot: string) => JsonRecord
   skillInstructions?: string
@@ -151,7 +156,44 @@ export function buildMcpConfig(
 }
 
 function mcpServersFromConfig(config: JsonRecord): JsonRecord {
-  return isJsonRecord(config.servers) ? config.servers : {}
+  if (isJsonRecord(config.servers)) return config.servers
+  const capabilities = isJsonRecord(config.capabilities) ? config.capabilities : undefined
+  const mcp = isJsonRecord(capabilities?.mcp) ? capabilities.mcp : undefined
+  return isJsonRecord(mcp?.servers) ? mcp.servers : {}
+}
+
+function mcpServerDescription(server: JsonRecord | undefined, fallback: string): string {
+  if (!server) return fallback
+  const transport = typeof server.transport === 'string' ? server.transport : ''
+  const command = typeof server.command === 'string' ? server.command : ''
+  const url = typeof server.url === 'string' ? server.url : ''
+  const status = typeof server.status === 'string' ? server.status : ''
+  const lastError = typeof server.lastError === 'string' ? server.lastError : ''
+  const toolCount = typeof server.toolCount === 'number' && Number.isFinite(server.toolCount)
+    ? server.toolCount
+    : undefined
+  const parts = [
+    status ? `status: ${status}` : '',
+    transport,
+    command || url,
+    toolCount != null ? `${toolCount} tools` : '',
+    lastError ? `error: ${lastError}` : ''
+  ].filter(Boolean)
+  return parts.length ? parts.join(' · ') : fallback
+}
+
+function mcpServerStatus(diagnostic: JsonRecord | undefined, config: JsonRecord | undefined): string {
+  const diagnosticStatus = typeof diagnostic?.status === 'string' ? diagnostic.status : ''
+  if (diagnosticStatus) return diagnosticStatus
+  if (config?.enabled === false || config?.disabled === true) return 'disabled'
+  return ''
+}
+
+function mcpStatusTone(status: string): MarketplaceItem['statusTone'] {
+  if (status === 'connected' || status === 'available') return 'success'
+  if (status === 'error' || status === 'unavailable') return 'error'
+  if (status === 'disabled') return 'warning'
+  return 'default'
 }
 
 export function mcpConfigHasServer(content: string, id: string): boolean {
@@ -216,6 +258,85 @@ function buildSkillContent(id: string, title: string, description: string, instr
     '',
     instructions
   ].join('\n')
+}
+
+function itemTitle(item: MarketplaceItem, t: (key: string) => string): string {
+  return item.title ?? (item.titleKey ? t(item.titleKey) : item.id)
+}
+
+function itemDescription(item: MarketplaceItem, t: (key: string) => string): string {
+  return item.description ?? (item.descriptionKey ? t(item.descriptionKey) : '')
+}
+
+export function skillMarketplaceItemsFromDiscoveredSkills(
+  skills: SkillListItem[],
+  labels: { project: string; global: string }
+): MarketplaceItem[] {
+  return skills.map((skill) => ({
+    id: skill.id,
+    kind: 'skill' as const,
+    title: skill.name,
+    description: skill.description ?? skill.root,
+    group: 'personal' as const,
+    sourceLabel: skill.scope === 'project' ? labels.project : labels.global
+  }))
+}
+
+export function mcpMarketplaceItemsFromConfigAndDiagnostics(
+  configText: string,
+  diagnostics: CoreRuntimeToolDiagnosticsJson | null,
+  labels: {
+    configured: string
+    connected: string
+    error: string
+    disabled: string
+  }
+): MarketplaceItem[] {
+  const servers = new Map<string, {
+    id: string
+    config?: JsonRecord
+    diagnostic?: JsonRecord
+  }>()
+  try {
+    const configServers = mcpServersFromConfig(parseMcpJsonConfig(configText))
+    for (const [id, value] of Object.entries(configServers)) {
+      if (!id.trim()) continue
+      servers.set(id, {
+        id,
+        config: isJsonRecord(value) ? value : {}
+      })
+    }
+  } catch {
+    /* Invalid config is surfaced elsewhere; keep the marketplace render resilient. */
+  }
+  for (const diagnostic of diagnostics?.mcpServers ?? []) {
+    const id = typeof diagnostic.id === 'string' ? diagnostic.id.trim() : ''
+    if (!id) continue
+    const existing = servers.get(id)
+    servers.set(id, {
+      id,
+      config: existing?.config,
+      diagnostic
+    })
+  }
+  return [...servers.values()].map(({ id, config, diagnostic }) => {
+    const status = mcpServerStatus(diagnostic, config)
+    const details = { ...(config ?? {}), ...(diagnostic ?? {}) }
+    const sourceLabel =
+      status === 'connected' || status === 'available' ? labels.connected :
+      status === 'error' || status === 'unavailable' ? labels.error :
+      status === 'disabled' ? labels.disabled :
+      labels.configured
+    return {
+      id,
+      kind: 'mcp' as const,
+      title: id,
+      description: mcpServerDescription(details, labels.configured),
+      group: 'personal' as const,
+      sourceLabel,
+      statusTone: mcpStatusTone(status)
+    }
+  }).sort((left, right) => left.title.localeCompare(right.title))
 }
 
 function skillNameLooksValid(raw: string): boolean {
@@ -342,13 +463,16 @@ export function PluginMarketplaceView(): ReactElement {
   const [customArgs, setCustomArgs] = useState('')
   const [customConfig, setCustomConfig] = useState('')
   const [customSkillBody, setCustomSkillBody] = useState('')
-	  const [skillRootId, setSkillRootId] = useState<SkillRootId>(() => loadPreferredSkillRootId())
-	  const [mcpConfigText, setMcpConfigText] = useState('')
-	  const [mcpLoaded, setMcpLoaded] = useState(false)
-	  const [runtimeInfo, setRuntimeInfo] = useState<CoreRuntimeInfoJson | null>(null)
-	  const [toolDiagnostics, setToolDiagnostics] = useState<CoreRuntimeToolDiagnosticsJson | null>(null)
-	  const [runtimeOverlayLoading, setRuntimeOverlayLoading] = useState(false)
-	  const [runtimeOverlayError, setRuntimeOverlayError] = useState('')
+  const [skillRootId, setSkillRootId] = useState<SkillRootId>(() => loadPreferredSkillRootId())
+  const [mcpConfigText, setMcpConfigText] = useState('')
+  const [mcpLoaded, setMcpLoaded] = useState(false)
+  const [runtimeInfo, setRuntimeInfo] = useState<CoreRuntimeInfoJson | null>(null)
+  const [toolDiagnostics, setToolDiagnostics] = useState<CoreRuntimeToolDiagnosticsJson | null>(null)
+  const [runtimeOverlayLoading, setRuntimeOverlayLoading] = useState(false)
+  const [runtimeOverlayError, setRuntimeOverlayError] = useState('')
+  const [discoveredSkills, setDiscoveredSkills] = useState<SkillListItem[]>([])
+  const [skillListLoading, setSkillListLoading] = useState(false)
+  const [skillListError, setSkillListError] = useState('')
 
   const skillRootOptions = useMemo<SkillRootOption[]>(() => {
     const hasWorkspace = !!workspaceRoot
@@ -404,51 +528,83 @@ export function PluginMarketplaceView(): ReactElement {
     return file.content
   }, [mcpConfigText])
 
-	  useEffect(() => {
-	    if (activeKind !== 'mcp' || mcpLoaded) return
-	    void readMcpConfig().catch((e) => {
-	      setNotice({ tone: 'error', message: e instanceof Error ? e.message : String(e) })
-	    })
-	  }, [activeKind, mcpLoaded, readMcpConfig])
+  useEffect(() => {
+    if (activeKind !== 'mcp' || mcpLoaded) return
+    void readMcpConfig().catch((e) => {
+      setNotice({ tone: 'error', message: e instanceof Error ? e.message : String(e) })
+    })
+  }, [activeKind, mcpLoaded, readMcpConfig])
 
-	  const refreshMcpRuntimeOverlay = useCallback(async (): Promise<void> => {
-	    if (typeof window.dsGui?.runtimeRequest !== 'function') {
-	      setRuntimeInfo(null)
-	      setToolDiagnostics(null)
-	      setRuntimeOverlayError(t('pluginMcpRuntimeUnavailable'))
-	      return
-	    }
-	    const provider = getProvider()
-	    if (!provider.getRuntimeInfo && !provider.getToolDiagnostics) {
-	      setRuntimeOverlayError(t('pluginMcpRuntimeUnavailable'))
-	      return
-	    }
-	    setRuntimeOverlayLoading(true)
-	    setRuntimeOverlayError('')
-	    try {
-	      const [runtimeResult, diagnosticsResult] = await Promise.allSettled([
-	        provider.getRuntimeInfo?.(),
-	        provider.getToolDiagnostics?.()
-	      ])
-	      if (runtimeResult.status === 'fulfilled' && runtimeResult.value) {
-	        setRuntimeInfo(runtimeResult.value)
-	      }
-	      if (diagnosticsResult.status === 'fulfilled' && diagnosticsResult.value) {
-	        setToolDiagnostics(diagnosticsResult.value)
-	      }
-	      const errors = [runtimeResult, diagnosticsResult]
-	        .filter((result): result is PromiseRejectedResult => result.status === 'rejected')
-	        .map((result) => runtimeOverlayErrorMessage(result.reason, t('pluginMcpRuntimeUnavailable')))
-	      if (errors.length > 0) setRuntimeOverlayError(errors[0] ?? t('pluginActionFailed'))
-	    } finally {
-	      setRuntimeOverlayLoading(false)
-	    }
-	  }, [t])
+  const refreshMcpRuntimeOverlay = useCallback(async (): Promise<void> => {
+    if (typeof window.dsGui?.runtimeRequest !== 'function') {
+      setRuntimeInfo(null)
+      setToolDiagnostics(null)
+      setRuntimeOverlayError(t('pluginMcpRuntimeUnavailable'))
+      return
+    }
+    const provider = getProvider()
+    if (!provider.getRuntimeInfo && !provider.getToolDiagnostics) {
+      setRuntimeOverlayError(t('pluginMcpRuntimeUnavailable'))
+      return
+    }
+    setRuntimeOverlayLoading(true)
+    setRuntimeOverlayError('')
+    try {
+      const [runtimeResult, diagnosticsResult] = await Promise.allSettled([
+        provider.getRuntimeInfo?.(),
+        provider.getToolDiagnostics?.()
+      ])
+      if (runtimeResult.status === 'fulfilled' && runtimeResult.value) {
+        setRuntimeInfo(runtimeResult.value)
+      }
+      if (diagnosticsResult.status === 'fulfilled' && diagnosticsResult.value) {
+        setToolDiagnostics(diagnosticsResult.value)
+      }
+      const errors = [runtimeResult, diagnosticsResult]
+        .filter((result): result is PromiseRejectedResult => result.status === 'rejected')
+        .map((result) => runtimeOverlayErrorMessage(result.reason, t('pluginMcpRuntimeUnavailable')))
+      if (errors.length > 0) setRuntimeOverlayError(errors[0] ?? t('pluginActionFailed'))
+    } finally {
+      setRuntimeOverlayLoading(false)
+    }
+  }, [t])
 
-	  useEffect(() => {
-	    if (activeKind !== 'mcp') return
-	    void refreshMcpRuntimeOverlay()
-	  }, [activeKind, refreshMcpRuntimeOverlay])
+  useEffect(() => {
+    if (activeKind !== 'mcp') return
+    void refreshMcpRuntimeOverlay()
+  }, [activeKind, refreshMcpRuntimeOverlay])
+
+  const refreshSkillList = useCallback(async (): Promise<void> => {
+    if (typeof window.dsGui?.listSkills !== 'function') {
+      setDiscoveredSkills([])
+      setSkillListError(t('pluginSkillScanUnavailable'))
+      return
+    }
+    setSkillListLoading(true)
+    setSkillListError('')
+    try {
+      const result = await window.dsGui.listSkills(workspaceRoot || undefined)
+      if (!result.ok) {
+        setDiscoveredSkills([])
+        setSkillListError(result.message)
+        return
+      }
+      setDiscoveredSkills(result.skills)
+      if (result.validationErrors.length > 0) {
+        setSkillListError(result.validationErrors[0]?.message ?? t('pluginSkillScanPartial'))
+      }
+    } catch (error) {
+      setDiscoveredSkills([])
+      setSkillListError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setSkillListLoading(false)
+    }
+  }, [t, workspaceRoot])
+
+  useEffect(() => {
+    if (activeKind !== 'skill') return
+    void refreshSkillList()
+  }, [activeKind, refreshSkillList])
 
   useEffect(() => {
     setNotice(null)
@@ -463,40 +619,82 @@ export function PluginMarketplaceView(): ReactElement {
     })
   }
 
+  const discoveredSkillIds = useMemo(
+    () => new Set(discoveredSkills.map((skill) => skill.id)),
+    [discoveredSkills]
+  )
+  const discoveredSkillItems = useMemo(
+    () => skillMarketplaceItemsFromDiscoveredSkills(discoveredSkills, {
+      project: t('pluginSkillSourceProject'),
+      global: t('pluginSkillSourceGlobal')
+    }),
+    [discoveredSkills, t]
+  )
+  const discoveredMcpItems = useMemo(
+    () => mcpMarketplaceItemsFromConfigAndDiagnostics(mcpConfigText, toolDiagnostics, {
+      configured: t('pluginMcpSourceConfigured'),
+      connected: t('pluginMcpSourceConnected'),
+      error: t('pluginMcpSourceError'),
+      disabled: t('pluginMcpSourceDisabled')
+    }).filter((item) => item.id !== GUI_SCHEDULE_MCP_SERVER_ID),
+    [mcpConfigText, t, toolDiagnostics]
+  )
+  const discoveredMcpIds = useMemo(
+    () => new Set(discoveredMcpItems.map((item) => item.id)),
+    [discoveredMcpItems]
+  )
+  const marketplaceItems = useMemo(
+    () => activeKind === 'skill'
+      ? [...RECOMMENDED_ITEMS, ...discoveredSkillItems]
+      : [...RECOMMENDED_ITEMS, ...discoveredMcpItems],
+    [activeKind, discoveredMcpItems, discoveredSkillItems]
+  )
+
   const isInstalled = useCallback((item: Pick<MarketplaceItem, 'kind' | 'id'>): boolean => {
+    if ('group' in item && item.group === 'personal') return true
     const catalogItem = RECOMMENDED_ITEMS.find((candidate) => candidate.kind === item.kind && candidate.id === item.id)
     if (catalogItem?.systemManaged) return true
+    if (item.kind === 'skill' && discoveredSkillIds.has(item.id)) return true
+    if (item.kind === 'mcp' && discoveredMcpIds.has(item.id)) return true
     const key = storageKey(item.kind, item.id)
     if (installed.includes(key)) return true
     return item.kind === 'mcp' && mcpConfigHasServer(mcpConfigText, item.id)
-  }, [installed, mcpConfigText])
+  }, [discoveredMcpIds, discoveredSkillIds, installed, mcpConfigText])
 
   const visibleItems = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase()
-    return RECOMMENDED_ITEMS.filter((item) => item.kind === activeKind)
+    return marketplaceItems.filter((item) => item.kind === activeKind)
       .filter((item) => {
-        const title = t(item.titleKey).toLowerCase()
-        const description = t(item.descriptionKey).toLowerCase()
-        return !normalizedQuery || title.includes(normalizedQuery) || description.includes(normalizedQuery)
+        const title = itemTitle(item, t).toLowerCase()
+        const description = itemDescription(item, t).toLowerCase()
+        const source = item.sourceLabel?.toLowerCase() ?? ''
+        return !normalizedQuery ||
+          title.includes(normalizedQuery) ||
+          description.includes(normalizedQuery) ||
+          source.includes(normalizedQuery) ||
+          item.id.includes(normalizedQuery)
       })
       .filter((item) => {
         if (filter === 'recommended') return item.group === 'recommended'
         if (filter === 'installed') return isInstalled(item)
         return true
       })
-  }, [activeKind, filter, isInstalled, query, t])
+  }, [activeKind, filter, isInstalled, marketplaceItems, query, t])
 
-	  const builtInItems = visibleItems.filter((item) => item.systemManaged)
-	  const recommendedItems = visibleItems.filter((item) => !item.systemManaged && !isInstalled(item))
-	  const personalItems = visibleItems.filter((item) => !item.systemManaged && isInstalled(item))
-	  const mcpRuntimeOverlay = useMemo(
-	    () => buildMcpMarketplaceOverlay({
-        runtimeInfo,
-        toolDiagnostics,
-        managedServers: [{ id: GUI_SCHEDULE_MCP_SERVER_ID, toolCount: 4 }]
-      }),
-	    [runtimeInfo, toolDiagnostics]
-	  )
+  const builtInItems = visibleItems.filter((item) => item.systemManaged)
+  const recommendedItems = visibleItems.filter((item) => !item.systemManaged && !isInstalled(item))
+  const personalItems = visibleItems.filter((item) =>
+    item.group === 'personal' ||
+    (!item.systemManaged && isInstalled(item) && !discoveredSkillIds.has(item.id) && !discoveredMcpIds.has(item.id))
+  )
+  const mcpRuntimeOverlay = useMemo(
+    () => buildMcpMarketplaceOverlay({
+      runtimeInfo,
+      toolDiagnostics,
+      managedServers: [{ id: GUI_SCHEDULE_MCP_SERVER_ID, toolCount: 4 }]
+    }),
+    [runtimeInfo, toolDiagnostics]
+  )
 
   const appendMcpConfig = async (id: string, config: JsonRecord): Promise<void> => {
     const content = mcpLoaded ? mcpConfigText : await readMcpConfig()
@@ -527,8 +725,9 @@ export function PluginMarketplaceView(): ReactElement {
         setNotice({ tone: 'error', message: t('pluginSkillRootMissing') })
         return
       }
-      const title = t(item.titleKey)
-      const description = t(item.descriptionKey)
+      if (item.group === 'personal') return
+      const title = itemTitle(item, t)
+      const description = itemDescription(item, t)
       const content = buildSkillContent(
         item.id,
         title,
@@ -541,6 +740,7 @@ export function PluginMarketplaceView(): ReactElement {
         return
       }
       markInstalled(storageKey('skill', item.id))
+      await refreshSkillList()
       setNotice({ tone: 'success', message: t('pluginSkillAdded', { path: result.path }) })
     } catch (e) {
       setNotice({ tone: 'error', message: e instanceof Error ? e.message : String(e) })
@@ -582,6 +782,7 @@ export function PluginMarketplaceView(): ReactElement {
           return
         }
         markInstalled(storageKey('skill', id))
+        await refreshSkillList()
         setNotice({ tone: 'success', message: t('pluginSkillAdded', { path: result.path }) })
       }
       setCustomName('')
@@ -678,8 +879,8 @@ export function PluginMarketplaceView(): ReactElement {
           </label>
         </div>
 
-	        {activeKind === 'skill' ? (
-	          <div className="mt-4 flex flex-col gap-2 md:flex-row md:items-center">
+        {activeKind === 'skill' ? (
+          <div className="mt-4 flex flex-col gap-2 md:flex-row md:items-center">
             <select
               value={selectedSkillRoot?.id ?? ''}
               onChange={(event) => setSkillRootId(event.target.value as SkillRootId)}
@@ -699,20 +900,38 @@ export function PluginMarketplaceView(): ReactElement {
               <FolderOpen className="h-4 w-4" />
               {t('pluginOpenLocation')}
             </button>
-	          </div>
-	        ) : null}
+            <button
+              type="button"
+              onClick={() => void refreshSkillList()}
+              disabled={skillListLoading}
+              className="inline-flex h-10 items-center gap-2 rounded-xl border border-ds-border bg-ds-card px-3 text-[13px] font-medium text-ds-ink shadow-sm transition hover:bg-ds-hover disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {skillListLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+              {t('pluginSkillRefresh')}
+            </button>
+            {skillListError ? (
+              <span className="text-[12px] text-red-700 dark:text-red-300">
+                {skillListError}
+              </span>
+            ) : (
+              <span className="text-[12px] text-ds-faint">
+                {t('pluginSkillDiscoveredCount', { count: discoveredSkills.length })}
+              </span>
+            )}
+          </div>
+        ) : null}
 
-	        {activeKind === 'mcp' ? (
-	          <McpRuntimeOverlayPanel
-	            overlay={mcpRuntimeOverlay}
-	            loading={runtimeOverlayLoading}
-	            error={runtimeOverlayError}
-	            onRefresh={() => void refreshMcpRuntimeOverlay()}
-	            t={t}
-	          />
-	        ) : null}
+        {activeKind === 'mcp' ? (
+          <McpRuntimeOverlayPanel
+            overlay={mcpRuntimeOverlay}
+            loading={runtimeOverlayLoading}
+            error={runtimeOverlayError}
+            onRefresh={() => void refreshMcpRuntimeOverlay()}
+            t={t}
+          />
+        ) : null}
 
-	        {customOpen ? (
+        {customOpen ? (
           <CustomPluginPanel
             activeKind={activeKind}
             customName={customName}
@@ -775,8 +994,8 @@ export function PluginMarketplaceView(): ReactElement {
       </div>
     </div>
   )
-	}
-	
+}
+
 function McpRuntimeOverlayPanel({
   overlay,
   loading,
@@ -886,6 +1105,20 @@ function mcpRuntimeStatusTone(status: McpMarketplaceOverlayStatus): string {
   }
 }
 
+function marketplaceSourceTone(tone: MarketplaceItem['statusTone']): string {
+  switch (tone) {
+    case 'success':
+      return 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-200'
+    case 'warning':
+      return 'bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-200'
+    case 'error':
+      return 'bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-300'
+    case 'default':
+    default:
+      return 'bg-ds-subtle text-ds-muted'
+  }
+}
+
 function runtimeOverlayErrorMessage(error: unknown, fallback: string): string {
   const message = error instanceof Error ? error.message : String(error)
   return /runtimeRequest|dsGui|Cannot read properties/i.test(message) ? fallback : message
@@ -927,11 +1160,20 @@ function PluginSection({
                 className="flex min-h-[92px] items-center gap-5 border-b border-ds-border-muted py-5"
               >
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-[17px] font-semibold text-ds-ink">
-                    {t(item.titleKey)}
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span className="truncate text-[17px] font-semibold text-ds-ink">
+                      {itemTitle(item, t)}
+                    </span>
+                    {item.sourceLabel ? (
+                      <span
+                        className={`shrink-0 rounded-md px-2 py-0.5 text-[11px] font-semibold ${marketplaceSourceTone(item.statusTone)}`}
+                      >
+                        {item.sourceLabel}
+                      </span>
+                    ) : null}
                   </div>
                   <p className="mt-1 line-clamp-2 text-[14px] leading-5 text-ds-muted">
-                    {t(item.descriptionKey)}
+                    {itemDescription(item, t)}
                   </p>
                 </div>
                 <button

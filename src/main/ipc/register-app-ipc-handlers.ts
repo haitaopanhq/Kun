@@ -39,6 +39,7 @@ import {
   runtimeRequestPayloadSchema,
   scheduleTaskFromTextPayloadSchema,
   shellOpenExternalUrlSchema,
+  skillListPayloadSchema,
   skillSaveFilePayloadSchema,
   settingsPatchSchema,
   streamIdSchema,
@@ -84,6 +85,7 @@ import {
   requestWriteInlineCompletion
 } from '../services/write-inline-completion-service'
 import { copyWriteDocumentAsRichText, exportWriteDocument } from '../services/write-export-service'
+import { listGuiSkills } from '../services/skill-service'
 
 type GuiUpdaterModule = typeof import('../gui-updater')
 
@@ -417,6 +419,12 @@ export function registerAppIpcHandlers(options: RegisterAppIpcHandlersOptions): 
       }
     }
   )
+
+  ipcMain.handle('skill:list', async (_, payload: unknown) => {
+    const request = parseIpcPayload('skill:list', skillListPayloadSchema, payload)
+    const settings = await store.load()
+    return listGuiSkills(settings, request.workspaceRoot)
+  })
 
   ipcMain.handle('skill:open-root', async (_, rootPath: unknown) => {
     const normalizedRootPath = parseIpcPayload('skill:open-root', rootPathSchema, rootPath)

@@ -1,5 +1,6 @@
-import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { createServer, type AddressInfo } from 'node:net'
+import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { configureLogger } from './logger'
@@ -119,6 +120,47 @@ describe('startKunChild', () => {
   })
 })
 
+describe('reclaimKunPort', () => {
+  it('reports a port as unavailable when another listener owns it', async () => {
+    const server = createServer()
+    await new Promise<void>((resolve, reject) => {
+      server.once('error', reject)
+      server.listen(0, '127.0.0.1', () => resolve())
+    })
+    try {
+      const address = server.address() as AddressInfo
+      const module = await import('./kun-process')
+
+      await expect(module.reclaimKunPort(address.port)).resolves.toEqual({
+        ok: false,
+        message: `port ${address.port} is in use`
+      })
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()))
+    }
+  })
+
+  it('allows non-positive ports so Kun can request an ephemeral port', async () => {
+    const module = await import('./kun-process')
+
+    await expect(module.reclaimKunPort(0)).resolves.toEqual({ ok: true })
+  })
+})
+
+describe('resolveKunDataDir', () => {
+  it('expands Windows-style home-relative data directories', async () => {
+    const module = await import('./kun-process')
+
+    expect(module.resolveKunDataDir({ dataDir: '~\\deepseek\\kun' })).toBe(join(homedir(), 'deepseek', 'kun'))
+  })
+
+  it('does not expand non-home tilde prefixes', async () => {
+    const module = await import('./kun-process')
+
+    expect(module.resolveKunDataDir({ dataDir: '~other\\kun' })).toBe('~other\\kun')
+  })
+})
+
 describe('syncGuiManagedKunConfig', () => {
   it('creates GUI-managed config with attachments enabled for image paste/upload', async () => {
     if (!tempRoot) throw new Error('temp root not initialized')
@@ -203,6 +245,35 @@ describe('syncGuiManagedKunConfig', () => {
       ],
       trustScope: 'user'
     })
+  })
+
+  it('adds GUI project and configured global skill roots to Kun runtime capabilities', async () => {
+    if (!tempRoot) throw new Error('temp root not initialized')
+    const configPath = join(tempRoot, 'config.json')
+    const module = await import('./kun-process')
+    const settings = createSettings('/tmp/fake-kun-child.js')
+    const workspaceRoot = join(tempRoot, 'workspace')
+    const extraRoot = join(tempRoot, 'extra-skills')
+    settings.workspaceRoot = workspaceRoot
+    settings.claw.skills.extraDirs = [extraRoot]
+    mkdirSync(join(workspaceRoot, '.codex', 'skills'), { recursive: true })
+
+    await module.syncGuiManagedKunConfig(tempRoot, defaultKunRuntimeSettings(), {
+      settings,
+      launch: {
+        appPath: '/tmp/deepseek-gui-test-app',
+        execPath: '/tmp/electron',
+        isPackaged: false
+      }
+    })
+
+    const parsed = JSON.parse(readFileSync(configPath, 'utf8')) as any
+    expect(parsed.capabilities.skills.enabled).toBe(true)
+    expect(parsed.capabilities.skills.legacySkillMd).toBe(true)
+    expect(parsed.capabilities.skills.roots).toEqual(expect.arrayContaining([
+      join(workspaceRoot, '.codex', 'skills'),
+      extraRoot
+    ]))
   })
 
   it('writes GUI-managed MCP search settings without removing existing servers', async () => {

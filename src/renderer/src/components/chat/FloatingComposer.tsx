@@ -25,6 +25,7 @@ import {
   RotateCcw,
   SearchCode,
   Send,
+  Sparkles,
   Square,
   Target,
   Trash2,
@@ -90,6 +91,19 @@ type Props = {
   attachmentUploadBusy?: boolean
   attachmentUploadError?: string | null
   webAccessAvailable?: boolean
+  skillCommands?: Array<{
+    id: string
+    name: string
+    description?: string
+    root?: string
+    scope?: 'project' | 'global'
+    legacy?: boolean
+    triggers?: {
+      commands?: string[]
+      fileTypes?: string[]
+      promptPatterns?: string[]
+    }
+  }>
   onPickAttachments?: (files: File[]) => void
   onPasteClipboardImage?: (options?: { silentNoImage?: boolean }) => void | Promise<void>
   onRemoveAttachment?: (id: string) => void
@@ -144,6 +158,20 @@ function imageMimeTypeFromFileName(name: string | undefined): string | undefined
   if (lower.endsWith('.heic')) return 'image/heic'
   if (lower.endsWith('.heif')) return 'image/heif'
   return undefined
+}
+
+function comparablePath(path: string | undefined): string {
+  return (path ?? '').replace(/\\/g, '/').replace(/\/+$/g, '').toLowerCase()
+}
+
+function isProjectSkillRoot(skillRoot: string | undefined, workspaceRoot: string): boolean {
+  const root = comparablePath(skillRoot)
+  const workspace = comparablePath(workspaceRoot)
+  return Boolean(root && workspace && (root === workspace || root.startsWith(`${workspace}/`)))
+}
+
+function isProjectSkill(skill: { root?: string; scope?: 'project' | 'global' }, workspaceRoot: string): boolean {
+  return skill.scope === 'project' || (skill.scope !== 'global' && isProjectSkillRoot(skill.root, workspaceRoot))
 }
 
 function normalizedImageFile(file: File, mimeTypeHint?: string): File | null {
@@ -231,6 +259,7 @@ export function FloatingComposer({
   attachmentUploadEnabled = false,
   attachmentUploadBusy = false,
   attachmentUploadError = null,
+  skillCommands = [],
   onPickAttachments,
   onPasteClipboardImage,
   onRemoveAttachment,
@@ -360,6 +389,40 @@ export function FloatingComposer({
     }
 
     if (route !== 'claw') {
+      const dynamicSkillCommands = skillCommands
+        .filter((skill) => skill.id.trim() && skill.name.trim())
+        .sort((left, right) => {
+          const leftProject = isProjectSkill(left, effectiveWorkspaceRoot)
+          const rightProject = isProjectSkill(right, effectiveWorkspaceRoot)
+          if (leftProject !== rightProject) return leftProject ? -1 : 1
+          return left.name.localeCompare(right.name)
+        })
+        .slice(0, 40)
+        .map<SlashCommand>((skill) => {
+          const prompt = `/skill:${skill.id} `
+          const scopeLabel = isProjectSkill(skill, effectiveWorkspaceRoot)
+            ? t('slashSkillScopeProject')
+            : t('slashSkillScopeGlobal')
+          const triggers = [
+            ...(skill.triggers?.commands ?? []),
+            ...(skill.triggers?.fileTypes ?? []),
+            ...(skill.triggers?.promptPatterns ?? [])
+          ]
+          return {
+            id: `skill:${skill.id}`,
+            kind: 'skill',
+            title: skill.name,
+            description: skill.description?.trim() || t('slashSkillDescriptionFallback'),
+            keywords: [skill.id, skill.name, skill.root ?? '', scopeLabel, 'skill', '技能', ...triggers],
+            icon: <Sparkles className="h-4 w-4" strokeWidth={1.9} />,
+            badge: prompt.trim(),
+            scopeLabel,
+            skillPrompt: prompt,
+            disabled: !runtimeReady
+          }
+        })
+      commands.push(...dynamicSkillCommands)
+
       commands.push({
         id: 'goal',
         title: t('slashCommandGoalTitle'),
@@ -440,12 +503,14 @@ export function FloatingComposer({
     activeThreadId,
     busy,
     canOpenGoalPanel,
+    effectiveWorkspaceRoot,
     hideBtwCommand,
     onBtwCommand,
     onPlanCommand,
     onReviewCommand,
     route,
     runtimeReady,
+    skillCommands,
     t
   ])
 
@@ -552,6 +617,14 @@ export function FloatingComposer({
   }, [busy, activeThreadGoal?.createdAt, activeThreadGoal?.objective, activeThreadGoal?.status])
 
   const applySlashCommand = (commandId: SlashCommandId): void => {
+    if (commandId.startsWith('skill:')) {
+      const command = slashCommands.find((item) => item.id === commandId)
+      if (command?.skillPrompt) {
+        setInput(command.skillPrompt)
+        draft.focusComposer()
+      }
+      return
+    }
     if (commandId === 'plan') {
       setInput('')
       setMode('plan')
@@ -915,12 +988,12 @@ export function FloatingComposer({
         ) : null}
 
         {slashQuery != null ? (
-          <div className="ds-card-strong absolute inset-x-2 bottom-full z-30 mb-3 overflow-hidden rounded-[26px] p-2 shadow-[0_26px_70px_rgba(15,23,42,0.16)]">
-            <div className="px-3 pb-2 pt-1 text-[12px] font-medium uppercase tracking-[0.14em] text-ds-faint">
+          <div className="ds-card-strong absolute bottom-full left-1/2 z-30 mb-2 w-[calc(100%_-_1rem)] max-w-[760px] -translate-x-1/2 overflow-hidden rounded-[16px] p-1.5 shadow-[0_18px_46px_rgba(15,23,42,0.14)]">
+            <div className="flex h-7 items-center px-2.5 text-[11.5px] font-semibold text-ds-muted">
               {t('slashCommandMenuTitle')}
             </div>
             {filteredSlashCommands.length > 0 ? (
-              <div className="flex flex-col gap-1">
+              <div className="flex max-h-[min(300px,calc(100vh-260px))] flex-col gap-0.5 overflow-y-auto pr-1">
                 {filteredSlashCommands.map((command) => {
                   const active = highlightedSlashCommand?.id === command.id
                   return (
@@ -930,30 +1003,35 @@ export function FloatingComposer({
                       onMouseDown={(event) => event.preventDefault()}
                       onClick={() => applySlashCommand(command.id)}
                       disabled={command.disabled}
-                      className={`flex w-full items-center gap-3 rounded-[20px] px-3 py-3 text-left transition disabled:cursor-not-allowed disabled:opacity-45 ${
+                      className={`flex min-h-[52px] w-full items-center gap-2.5 rounded-[12px] px-2.5 py-2 text-left transition disabled:cursor-not-allowed disabled:opacity-45 ${
                         active && !command.disabled
-                          ? 'bg-accent/10 text-ds-ink shadow-[inset_0_0_0_1px_rgba(0,136,255,0.14)]'
+                          ? 'bg-ds-hover text-ds-ink shadow-[inset_0_0_0_1px_rgba(15,23,42,0.06)]'
                           : 'text-ds-muted hover:bg-ds-hover hover:text-ds-ink disabled:hover:bg-transparent disabled:hover:text-ds-muted'
                       }`}
                     >
                       <span
-                        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl ${
-                          active && !command.disabled ? 'bg-accent/12 text-accent' : 'bg-ds-hover text-ds-muted'
+                        className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-[10px] ${
+                          active && !command.disabled ? 'bg-white text-accent shadow-sm dark:bg-ds-card' : 'bg-ds-hover text-ds-muted'
                         }`}
                       >
                         {command.icon}
                       </span>
                       <span className="min-w-0 flex-1">
-                        <span className="block text-[15px] font-semibold text-inherit">
+                        <span className="block truncate text-[13.5px] font-semibold leading-5 text-inherit">
                           {command.title}
                         </span>
-                        <span className="mt-0.5 block text-[13px] leading-5 text-ds-faint">
+                        <span className="mt-0.5 block truncate text-[12px] leading-4 text-ds-faint">
                           {command.description}
                         </span>
                       </span>
-                      <span className="flex shrink-0 flex-col items-end gap-1">
-                        <span className="rounded-full border border-ds-border-muted px-2.5 py-1 text-[11px] font-semibold text-ds-faint">
-                          /{command.id}
+                      <span className="hidden min-w-[106px] shrink-0 flex-col items-end gap-1 sm:flex">
+                        {command.scopeLabel ? (
+                          <span className="text-[10.5px] font-semibold leading-none text-ds-muted">
+                            {command.scopeLabel}
+                          </span>
+                        ) : null}
+                        <span className="max-w-[150px] truncate rounded-full border border-ds-border-muted px-2 py-0.5 text-[10.5px] font-semibold leading-4 text-ds-faint">
+                          {command.badge ?? `/${command.id}`}
                         </span>
                       </span>
                     </button>
@@ -961,7 +1039,7 @@ export function FloatingComposer({
                 })}
               </div>
             ) : (
-              <div className="rounded-[20px] border border-dashed border-ds-border-muted px-4 py-5 text-[13px] text-ds-faint">
+              <div className="rounded-[12px] border border-dashed border-ds-border-muted px-3 py-3 text-[12px] text-ds-faint">
                 {t('slashCommandEmpty')}
               </div>
             )}

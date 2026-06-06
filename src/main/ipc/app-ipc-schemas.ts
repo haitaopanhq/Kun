@@ -12,6 +12,7 @@ import {
   KUN_RUNTIME_INFO_TEMPLATE,
   KUN_RUNTIME_TOOLS_TEMPLATE,
   KUN_SESSION_RESUME_TEMPLATE,
+  KUN_SKILLS_TEMPLATE,
   KUN_THREADS_TEMPLATE,
   KUN_THREAD_COMPACT_TEMPLATE,
   KUN_THREAD_FORK_TEMPLATE,
@@ -95,6 +96,7 @@ const ENDPOINTS: readonly EndpointTemplate[] = [
   compileEndpoint(KUN_HEALTH_TEMPLATE, ['GET']),
   compileEndpoint(KUN_RUNTIME_INFO_TEMPLATE, ['GET']),
   compileEndpoint(KUN_RUNTIME_TOOLS_TEMPLATE, ['GET']),
+  compileEndpoint(KUN_SKILLS_TEMPLATE, ['GET']),
   compileEndpoint(KUN_ATTACHMENTS_TEMPLATE, ['POST']),
   compileEndpoint(KUN_ATTACHMENT_DIAGNOSTICS_TEMPLATE, ['GET']),
   compileEndpoint(KUN_ATTACHMENT_TEMPLATE, ['GET']),
@@ -483,6 +485,12 @@ export const skillSaveFilePayloadSchema = z
     rootPath: trimmedString(MAX_PATH_LENGTH),
     skillName: trimmedString(128),
     content: z.string().max(MAX_SKILL_FILE_BYTES)
+  })
+  .strict()
+
+export const skillListPayloadSchema = z
+  .object({
+    workspaceRoot: z.string().trim().max(MAX_PATH_LENGTH).optional()
   })
   .strict()
 

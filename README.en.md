@@ -6,7 +6,7 @@
 
 [简体中文](./README.md) | English
 
-> Bring the local Kun runtime into a desktop workbench: **Code** for project work, **Write** for documents, and **Connect phone** for IM automation and scheduled tasks. Chat, plan, goals, code review, Skill/MCP management, and updates live in one graphical app.
+> Bring Kun's high-token-ROI local agent runtime into a desktop workbench: **Code** for project work, **Write** for documents, and **Connect phone** for IM automation and scheduled tasks. Every token is steered toward requirements, code, decisions, and results.
 
 [Website](https://deepseek-gui.com) | [Download](https://deepseek-gui.com)
 
@@ -15,7 +15,7 @@
 
 DeepSeek GUI is a local desktop workbench for developers and frequent AI users. It uses Kun as the only runtime and turns the terminal agent experience into an easier, longer-lived app: choose a workspace, start a task, watch reasoning and tool calls stream in, review file changes, and approve sensitive actions when needed.
 
-The goal is not to ship another chat wrapper. The goal is to make DeepSeek feel like a reliable desktop partner for real project work.
+The goal is not to ship another chat wrapper. The goal is to make DeepSeek feel like a reliable desktop partner for real project work. Kun's core advantage is high token ROI: the same context budget spends less on repeated prefixes, giant tool catalogs, and runaway output, and more on the information that actually moves the task forward.
 
 ---
 
@@ -23,6 +23,19 @@ The goal is not to ship another chat wrapper. The goal is to make DeepSeek feel 
   <img src="src/asset/img/code.gif" alt="Code mode demo" width="49%" style="max-width: 100%;">
   <img src="src/asset/img/write.gif" alt="Write mode demo" width="49%" style="max-width: 100%;">
 </p>
+
+## Why Kun Delivers High Token ROI
+
+Kun makes token economy the default behavior of the agent loop, not a cleanup step after the fact. It does more than compress text: before each model call, it decides which information is worth entering context.
+
+| Kun advantage | Where the ROI comes from |
+| --- | --- |
+| **Cache-first agent loop** | Stable system prompts, tool schemas, and immutable prefixes make DeepSeek-native cache hits more likely, so long sessions do not keep paying for the same background. |
+| **Tool context on demand** | When MCP catalogs are large, Kun can search for relevant tools first, then describe and call the target tool instead of sending every tool schema on every turn. |
+| **Context hygiene** | Long tool results, long arguments, base64 payloads, repeated tool loops, and low-value history are bounded while code, paths, errors, decisions, and open tasks are preserved. |
+| **Visible usage payback** | Runtime telemetry tracks cache hit/miss, token usage, and estimated savings; the GUI surfaces Token economy savings so cost return is observable over time. |
+
+The result: Kun is built for real project work with long tasks, long sessions, and many tools. It keeps the model's attention on high-value context, helping the same API budget produce more useful progress.
 
 ## What We Built
 
@@ -54,7 +67,7 @@ The goal is not to ship another chat wrapper. The goal is to make DeepSeek feel 
 - **Connect phone**: run a background agent alongside normal chat, with current support for Feishu / Lark / WeChat, IM webhook / relay flows, and scheduled tasks.
 - **Scheduled tasks**: create one-time, daily, interval, or manual tasks with their own workspace, model, and reasoning effort so Kun can run while the computer is awake.
 - **Write mode**: manage `~/.deepseekgui/write_workspace` and custom writing spaces, browse Markdown files, use live Markdown editing, preview relative images, get DeepSeek FIM short completion / inspiration completion with optional cross-document BM25 + keyword retrieval, export the current document as `HTML / PDF / DOC / DOCX`, and invoke the writing assistant directly from selected text.
-- **Token ROI optimization**: Kun keeps prompt prefixes stable, tracks DeepSeek-native cache hit/miss fields, compacts context and tool output, and can use MCP search to discover tools progressively instead of sending irrelevant tool tokens to the model.
+- **High token ROI**: Kun keeps prompt prefixes stable, tracks DeepSeek-native cache hit/miss fields, compacts context and tool output, and uses MCP search to discover tools progressively so tokens stay focused on requirements, code, decisions, and results.
 - **Friendly first launch**: choose language, add your DeepSeek API key, and optionally set a compatible Base URL.
 - **Local-first**: preferences, sessions, logs, and runtime config stay on your machine; model calls use your own DeepSeek API key.
 - **English and Chinese UI**: switch languages from Settings at any time.
@@ -75,7 +88,10 @@ longer context, richer tools, and sustained project collaboration.
 Kun's operating principle is to raise the ROI of every token. The
 user's context budget should go toward requirements, code, decisions,
 and results, not repeated tool schemas, runaway tool output, invalid
-history, or prefixes that could have been reused from cache.
+history, or prefixes that could have been reused from cache. It is
+optimized less for one-off questions and more for real workflows that
+read and write projects, call tools repeatedly, and carry context over
+long sessions.
 
 Kun fuses a design that has been battle-tested in the
 wild:
