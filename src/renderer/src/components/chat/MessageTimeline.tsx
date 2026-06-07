@@ -275,11 +275,7 @@ function MessageTurn({
   }, [turn.blocks, isProcessing])
   const { think: liveThink, content: liveContent } = splitThink(live)
   const liveProcessText = [liveReasoning, liveThink].filter(Boolean).join('\n\n')
-  const [workExpanded, setWorkExpanded] = useState(isProcessing)
-
-  useEffect(() => {
-    setWorkExpanded(isProcessing)
-  }, [isProcessing])
+  const [workExpanded, setWorkExpanded] = useState(false)
 
   const { processBlocks, assistantContentBlocks, turnFileChanges } = useMemo(
     () =>
@@ -298,8 +294,8 @@ function MessageTurn({
   )
 
   const processSections = useMemo(
-    () => (workExpanded || isProcessing ? groupProcessSections(processBlocks) : []),
-    [processBlocks, workExpanded, isProcessing]
+    () => (workExpanded ? groupProcessSections(processBlocks) : []),
+    [processBlocks, workExpanded]
   )
   const reasoningSectionCount = useMemo(
     () => processSections.filter((section) => section.kind === 'reasoning').length,
