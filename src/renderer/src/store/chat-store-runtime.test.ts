@@ -1,8 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import type { ChatBlock } from '../agent/types'
-import type { ChatState } from './chat-store-types'
 import {
-  buildThreadEventSink,
   clearWatchedCompletionNotification,
   clearWatchedCompletionNotifications,
   clearPendingClawFeishuMirrors,
@@ -13,49 +10,6 @@ import {
   takePendingClawFeishuMirror,
   watchTurnCompletionNotification
 } from './chat-store-runtime'
-
-describe('thread event sink runtime errors', () => {
-  it('does not keep an aborted turn busy after interrupt', () => {
-    const blocks: ChatBlock[] = [
-      { kind: 'user', id: 'user-1', text: 'run command' },
-      {
-        kind: 'tool',
-        id: 'tool-1',
-        summary: 'Running command',
-        status: 'running',
-        toolKind: 'command_execution'
-      }
-    ]
-    const state = {
-      activeThreadId: 'thr-1',
-      blocks,
-      busy: true,
-      currentTurnId: 'turn-1',
-      currentTurnUserId: 'user-1',
-      error: null,
-      liveAssistant: '',
-      liveReasoning: '',
-      turnStartedAtByUserId: { 'user-1': Date.now() - 1000 },
-      turnDurationByUserId: {},
-      turnReasoningFirstAtByUserId: {},
-      turnReasoningLastAtByUserId: {}
-    } as unknown as ChatState
-    const set = (partial: Partial<ChatState> | ((value: ChatState) => Partial<ChatState>)): void => {
-      Object.assign(state, typeof partial === 'function' ? partial(state) : partial)
-    }
-
-    buildThreadEventSink(set, () => state).onError(new Error('turn aborted'))
-
-    expect(state.busy).toBe(false)
-    expect(state.currentTurnId).toBeNull()
-    expect(state.currentTurnUserId).toBeNull()
-    expect(state.error).toBeNull()
-    expect(state.blocks.map((block) => ('status' in block ? block.status : block.kind))).toEqual([
-      'user',
-      'error'
-    ])
-  })
-})
 
 describe('pending Claw Feishu mirrors', () => {
   afterEach(() => {

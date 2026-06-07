@@ -9,7 +9,6 @@ import {
   mergeModelProviderSettings,
   mergeScheduleSettings,
   mergeWriteSettings,
-  normalizeAppBehaviorSettings,
   normalizeClawSettings,
   normalizeGuiUpdateChannel,
   normalizeModelProviderSettings,
@@ -56,10 +55,6 @@ export function mergeSettings(current: AppSettingsV1, patch: SettingsPatch): App
       ...safeCurrent.notifications,
       ...(patch.notifications ?? {})
     },
-    appBehavior: normalizeAppBehaviorSettings({
-      ...safeCurrent.appBehavior,
-      ...(patch.appBehavior ?? {})
-    }),
     write: mergeWriteSettings(safeCurrent.write, patch.write),
     claw: mergeClawSettings(safeCurrent.claw, patch.claw),
     schedule: mergeScheduleSettings(safeCurrent.schedule, patch.schedule),
@@ -95,7 +90,6 @@ export function coerceRendererSettings(settings: AppSettingsV1): AppSettingsV1 {
     notifications: {
       turnComplete: raw.notifications?.turnComplete !== false
     },
-    appBehavior: normalizeAppBehaviorSettings(raw.appBehavior),
     write: normalizeWriteSettings(raw.write),
     claw: normalizeClawSettings(raw.claw),
     schedule: normalizeScheduleSettings(raw.schedule),

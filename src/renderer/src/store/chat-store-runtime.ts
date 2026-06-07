@@ -21,7 +21,6 @@ import { isClawThread } from './chat-store-helpers'
 import {
   collectAssistantTextForTurn,
   reconcileOptimisticUserBlock,
-  settlePendingRuntimeWorkAfterInterrupt,
   threadSnapshotLooksRunning,
   upsertUserBlock
 } from './chat-store-runtime-helpers'
@@ -151,17 +150,6 @@ export function buildFollowupMessageFromUserInput(
 function isUserInputInterruptError(message: string | undefined): boolean {
   const lowered = message?.toLowerCase() ?? ''
   return lowered.includes('cancel') && lowered.includes('awaiting user input')
-}
-
-function isInterruptSettledError(error: unknown, message: string): boolean {
-  const code = getRuntimeErrorCode(error)
-  if (code === 'aborted') return true
-  if (isUserInputInterruptError(message)) return true
-  const lowered = message.toLowerCase()
-  return lowered.includes('interrupted') ||
-    lowered.includes('aborted') ||
-    lowered.includes('cancelled') ||
-    lowered.includes('canceled')
 }
 
 export async function readActiveWriteWorkspace(fallbackWorkspaceRoot: string): Promise<string> {
@@ -954,24 +942,20 @@ export function buildThreadEventSink(
       resetBusyRecoveryAttempts()
       clearBusyWatchdog()
       const state = get()
-      const message = formatRuntimeError(err)
-      const interrupted = isInterruptSettledError(err, message)
       takePendingClawFeishuMirror(state.currentTurnId)
       set((s) => {
         const wasBusy = s.busy
         const out = flushLiveBlocks(s, {
           ...finalizeTurnTiming(s),
-          error: interrupted ? null : message
+          error: formatRuntimeError(err)
         })
         // Keep the busy flag if the turn was active — the interrupt button
         // should stay visible so the user can interrupt a stuck turn. The
         // watchdog (re-armed below) will eventually time out if the turn
         // never recovers.
-        if (!wasBusy || interrupted) {
+        if (!wasBusy) {
           out.busy = false
           out.currentTurnId = null
-          out.currentTurnUserId = null
-          out.blocks = settlePendingRuntimeWorkAfterInterrupt(out.blocks ?? s.blocks)
         }
         return out
       })

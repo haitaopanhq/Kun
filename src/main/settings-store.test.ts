@@ -15,11 +15,6 @@ describe('JsonSettingsStore', () => {
 
     expect(loaded.guiUpdate.channel).toBe(DEFAULT_GUI_UPDATE_CHANNEL)
     expect(loaded.agents.kun.approvalPolicy).toBe(DEFAULT_APPROVAL_POLICY)
-    expect(loaded.appBehavior).toEqual({
-      openAtLogin: false,
-      startMinimized: false,
-      closeToTray: false
-    })
   })
 
   it('creates a default write workspace with welcome.md', async () => {
@@ -219,36 +214,6 @@ describe('JsonSettingsStore', () => {
 
     expect(saved.agents.kun.model).toBe('deepseek-reasoner')
     expect(saved.agents.kun.approvalPolicy).toBe('on-request')
-  })
-
-  it('merges desktop behavior patches without keeping invalid startup state', async () => {
-    const userDataDir = await mkdtemp(join(tmpdir(), 'ds-gui-settings-'))
-    const store = new JsonSettingsStore(userDataDir)
-    await store.load()
-
-    const enabled = await store.patch({
-      appBehavior: {
-        openAtLogin: true,
-        startMinimized: true,
-        closeToTray: true
-      }
-    })
-    const disabled = await store.patch({
-      appBehavior: {
-        openAtLogin: false
-      }
-    })
-
-    expect(enabled.appBehavior).toEqual({
-      openAtLogin: true,
-      startMinimized: true,
-      closeToTray: true
-    })
-    expect(disabled.appBehavior).toEqual({
-      openAtLogin: false,
-      startMinimized: false,
-      closeToTray: true
-    })
   })
 
   it('omits agentProvider when writing normalized settings to disk', async () => {
