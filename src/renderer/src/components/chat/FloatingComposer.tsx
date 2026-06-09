@@ -563,6 +563,11 @@ export function FloatingComposer({
     activeClawChannel?.remoteSession?.chatId?.trim()
   )
 
+  const canEditComposer = runtimeReady && (
+    route === 'claw'
+      ? clawHasInboundConversation
+      : true
+  )
   const canCompose = runtimeReady && (
     route === 'claw'
       ? clawHasInboundConversation
@@ -596,7 +601,7 @@ export function FloatingComposer({
   const hiddenChangedFileCount = Math.max(0, changedFiles.length - visibleChangedFiles.length)
   const stretchModelPicker =
     compact && modelPickerMode === 'combobox' && !showToolbarStartControls && !hideModelPicker
-  const draft = useComposerDraft({ input, canCompose })
+  const draft = useComposerDraft({ input, canCompose: canEditComposer })
   const slashQuery = getSlashQuery(input)
   const [composerCursor, setComposerCursor] = useState(() => input.length)
   const [selectedCommandIndex, setSelectedCommandIndex] = useState(0)
@@ -1201,7 +1206,7 @@ export function FloatingComposer({
   }
 
   const handleComposerShellMouseDown = (event: ReactMouseEvent<HTMLDivElement>): void => {
-    if (!canCompose || event.target === draft.textareaRef.current) return
+    if (!canEditComposer || event.target === draft.textareaRef.current) return
     const target = event.target
     if (
       target instanceof Element &&
@@ -1697,11 +1702,11 @@ export function FloatingComposer({
             ref={draft.textareaRef}
             rows={1}
             className={`ds-no-drag block min-w-0 resize-none break-words bg-transparent px-1 py-2.5 text-[15px] leading-[1.45] text-ds-ink placeholder:text-ds-faint focus:outline-none [overflow-wrap:anywhere] ${
-              canCompose ? '' : 'opacity-80'
+              canEditComposer ? '' : 'opacity-80'
             } ${compact ? 'text-[14px] py-2' : 'min-h-[40px]'}`}
             placeholder={placeholder}
             value={input}
-            disabled={!canCompose}
+            disabled={!canEditComposer}
             onChange={(e) => {
               setInput(e.target.value)
               setComposerCursor(e.target.selectionStart ?? e.target.value.length)

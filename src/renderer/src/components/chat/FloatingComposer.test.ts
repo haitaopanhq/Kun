@@ -845,4 +845,40 @@ describe('FloatingComposer capability controls', () => {
     expect(html).toContain('ds-composer-shell ds-chat-composer ds-frosted ds-no-drag')
     expect(html.match(/<textarea[^>]*>/)?.[0] ?? '').not.toContain('disabled=""')
   })
+
+  it('allows typing while a new chat has no selected runtime thread yet', () => {
+    useChatStore.setState({
+      activeThreadId: null,
+      activeThreadGoal: null,
+      route: 'chat',
+      workspaceRoot: '',
+      threads: []
+    })
+
+    const html = renderToStaticMarkup(
+      createElement(FloatingComposer, {
+        input: 'draft while creating',
+        setInput: () => undefined,
+        mode: 'agent',
+        setMode: () => undefined,
+        busy: false,
+        runtimeReady: true,
+        hasActiveThread: false,
+        composerModel: '',
+        composerPickList: [],
+        onComposerModelChange: () => undefined,
+        queuedMessages: [],
+        onRemoveQueuedMessage: () => undefined,
+        onSend: () => undefined,
+        onInterrupt: () => undefined,
+        attachmentUploadEnabled: false,
+        webAccessAvailable: false
+      })
+    )
+
+    expect(html.match(/<textarea[^>]*>/)?.[0] ?? '').not.toContain('disabled=""')
+    expect(html).toContain('Choose a working directory before creating a thread.')
+    const sendButton = html.match(/<button[^>]*aria-label="Send"[^>]*>/)?.[0] ?? ''
+    expect(sendButton).toContain('disabled=""')
+  })
 })
