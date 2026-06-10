@@ -248,9 +248,12 @@ export class DeepseekCompatModelClient implements ModelClient {
 
   private buildHeaders(stream: boolean, endpointFormat: ModelEndpointFormat): Record<string, string> {
     const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      Accept: stream ? 'text/event-stream' : 'application/json'
+      'Content-Type': 'application/json'
     }
+    // `stream: true` is enough for OpenAI-compatible providers to return SSE.
+    // Some Windows Node/Electron paths time out when routing requests with
+    // `Accept: text/event-stream`, while the same stream works without it.
+    if (!stream) headers.Accept = 'application/json'
     if (this.config.apiKey) {
       if (endpointFormat === 'messages') {
         headers.Authorization = `Bearer ${this.config.apiKey}`

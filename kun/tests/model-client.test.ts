@@ -473,6 +473,7 @@ describe('DeepseekCompatModelClient', () => {
 
   it('requests usage in streaming responses', async () => {
     const sentBodies: Array<Record<string, unknown>> = []
+    const sentHeaders: Array<Record<string, string>> = []
     const encoder = new TextEncoder()
     const body = new ReadableStream<Uint8Array>({
       start(controller) {
@@ -483,6 +484,7 @@ describe('DeepseekCompatModelClient', () => {
     })
     const fetchImpl: typeof fetch = async (_url, init) => {
       sentBodies.push(JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>)
+      sentHeaders.push(init?.headers as Record<string, string>)
       return new Response(body, { status: 200, headers: { 'content-type': 'text/event-stream' } })
     }
     const client = new DeepseekCompatModelClient({
@@ -500,6 +502,7 @@ describe('DeepseekCompatModelClient', () => {
       stream: true,
       stream_options: { include_usage: true }
     })
+    expect(sentHeaders[0]?.Accept).toBeUndefined()
   })
 
   it('keeps requiredToolName as loop metadata instead of sending provider tool_choice', async () => {
