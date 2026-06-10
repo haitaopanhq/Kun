@@ -727,7 +727,7 @@ describe('FloatingComposer capability controls', () => {
     expect(html).not.toContain('aria-label="Send" disabled=""')
   })
 
-  it('renders execution access controls in the composer footer', () => {
+  it('hides execution access controls in the composer footer', () => {
     useChatStore.setState({
       activeThreadId: 'thr_1',
       activeThreadGoal: null,
@@ -761,9 +761,8 @@ describe('FloatingComposer capability controls', () => {
       })
     )
 
-    expect(html).toContain('Full access')
-    expect(html).toContain('aria-haspopup="menu"')
-    expect(html).toContain('aria-label="Execution"')
+    expect(html).not.toContain('Full access')
+    expect(html).not.toContain('aria-label="Execution"')
   })
 
   it('renders a changed-file review card above the input', () => {

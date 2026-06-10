@@ -79,7 +79,6 @@ import {
   type QueuedComposerMessage
 } from './FloatingComposerQueuedMessages'
 import {
-  FloatingComposerExecutionPicker,
   type ComposerExecutionSettings
 } from './FloatingComposerExecutionPicker'
 import { useComposerDraft } from './use-composer-draft'
@@ -583,8 +582,6 @@ export function FloatingComposer({
   const canRunReview = canCompose && route !== 'claw' && Boolean(onReviewCommand)
   const canOpenComposerMenu = showComposerMenuButton && (canTogglePlanMode || canOpenGoalPanel || canRunReview)
   const showToolbarStartControls = showComposerMenuButton
-  const showExecutionPicker =
-    !compact && route === 'chat' && Boolean(executionSettings && onExecutionSettingsChange)
   const showChangeSummary = !compact && route === 'chat' && changedFiles.length > 0
   const effectiveChangedFileStats = changedFileStats ?? changedFiles.reduce(
     (stats, file) => ({
@@ -1929,14 +1926,6 @@ export function FloatingComposer({
         <div className="ds-composer-footer mt-1 flex min-h-7 flex-wrap items-center justify-between gap-x-2.5 gap-y-1.5 px-3">
           <div className="ds-composer-footer-left flex min-w-0 flex-1 flex-wrap items-center gap-2">
             <GitBranchPicker workspaceRoot={effectiveWorkspaceRoot} />
-            {showExecutionPicker && executionSettings && onExecutionSettingsChange ? (
-              <FloatingComposerExecutionPicker
-                value={executionSettings}
-                applying={executionSettingsApplying}
-                disabled={!runtimeReady || busy}
-                onChange={onExecutionSettingsChange}
-              />
-            ) : null}
             {showThreadUsageFooter ? (
               <div
                 className="ds-composer-usage ds-no-drag inline-flex min-h-7 max-w-full min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 overflow-visible rounded-lg border border-ds-border-muted bg-ds-card/72 px-2.5 py-0.5 text-[12.5px] font-medium leading-5 text-ds-muted shadow-sm"

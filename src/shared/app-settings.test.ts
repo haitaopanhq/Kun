@@ -6,6 +6,7 @@ import {
   DEFAULT_KUN_DATA_DIR,
   DEFAULT_KUN_MODEL,
   DEFAULT_APPROVAL_POLICY,
+  DEFAULT_SANDBOX_MODE,
   DEFAULT_WEIXIN_BRIDGE_RPC_URL,
   DEFAULT_SCHEDULE_INTERNAL_PORT,
   buildClawRuntimePrompt,
@@ -90,6 +91,11 @@ describe('kun defaults', () => {
   it('defaults approval policy to auto', () => {
     expect(defaultKunRuntimeSettings().approvalPolicy).toBe(DEFAULT_APPROVAL_POLICY)
     expect(defaultKunRuntimeSettings().approvalPolicy).toBe('auto')
+  })
+
+  it('defaults sandbox mode to full access', () => {
+    expect(defaultKunRuntimeSettings().sandboxMode).toBe(DEFAULT_SANDBOX_MODE)
+    expect(defaultKunRuntimeSettings().sandboxMode).toBe('danger-full-access')
   })
 
   it('defaults token economy mode to off', () => {

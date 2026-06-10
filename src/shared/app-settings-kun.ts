@@ -70,7 +70,7 @@ function legacyLocalHttpRuntimeDefaults(port = 7878): LegacyLocalHttpRuntimeSett
     runtimeToken: '',
     extraCorsOrigins: ['http://localhost:5173', 'http://127.0.0.1:5173'],
     approvalPolicy: DEFAULT_APPROVAL_POLICY,
-    sandboxMode: 'workspace-write'
+    sandboxMode: DEFAULT_SANDBOX_MODE
   }
 }
 
