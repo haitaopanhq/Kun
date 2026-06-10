@@ -41,6 +41,7 @@ import {
   writeRichExternalSyncMeta
 } from './extensions/term-propagation'
 import { WriteRichTemplateShortcuts } from './extensions/template-shortcuts'
+import { SddRequirementBadges } from './extensions/sdd-requirement-badges'
 
 /**
  * Imperative surface for flows that operate on the markdown projection
@@ -63,6 +64,8 @@ type Props = {
   filePath?: string | null
   imageDirectory?: string | null
   readOnly?: boolean
+  /** Render SDD requirement headings with status pills (SDD draft editor). */
+  requirementBadges?: boolean
   completionModel?: string
   completionEnabled?: boolean
   completionDebounceMs?: number
@@ -176,6 +179,7 @@ export function WriteRichEditor({
   filePath,
   imageDirectory,
   readOnly = false,
+  requirementBadges = false,
   completionModel = '',
   completionEnabled = false,
   completionDebounceMs = 0,
@@ -331,6 +335,7 @@ export function WriteRichEditor({
       WriteRichTemplateShortcuts.configure({
         isReadOnly: () => readOnlyRef.current
       }),
+      ...(requirementBadges ? [SddRequirementBadges] : []),
       saveShortcut
     ]
 

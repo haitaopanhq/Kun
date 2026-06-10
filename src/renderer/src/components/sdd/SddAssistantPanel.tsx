@@ -1,5 +1,5 @@
 import type { ReactElement } from 'react'
-import { FileQuestion, Lightbulb, PanelRightClose, Plus, Search, Sparkles } from 'lucide-react'
+import { FileQuestion, Lightbulb, ListChecks, PanelRightClose, Plus, Search, Sparkles } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { ChatBlock, RuntimeConnectionStatus } from '../../agent/types'
 import type { QueuedUserMessage } from '../../store/chat-store-types'
@@ -167,6 +167,19 @@ export function SddAssistantPanel({
                 <span className="min-w-0">
                   <span className="block text-[13.5px] font-semibold text-ds-ink">{t('sddAssistantResearch')}</span>
                   <span className="mt-0.5 block truncate text-[12px] text-ds-faint">{t('sddAssistantResearchSub')}</span>
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setAssistantPrompt(t('sddAssistantStructurePrompt'))}
+                className="sdd-assistant-action flex items-center gap-3 rounded-2xl border border-ds-border bg-ds-card px-3 py-3 text-left transition hover:border-accent/25 hover:bg-ds-hover"
+              >
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-violet-500/10 text-violet-600 dark:text-violet-300">
+                  <ListChecks className="h-4 w-4" strokeWidth={1.9} />
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-[13.5px] font-semibold text-ds-ink">{t('sddAssistantStructure')}</span>
+                  <span className="mt-0.5 block truncate text-[12px] text-ds-faint">{t('sddAssistantStructureSub')}</span>
                 </span>
               </button>
             </div>

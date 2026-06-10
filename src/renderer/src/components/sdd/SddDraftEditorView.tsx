@@ -1,8 +1,10 @@
-import { useEffect, useRef, type ReactElement } from 'react'
+import { useEffect, useMemo, useRef, type ReactElement } from 'react'
 import { ArrowRight, FileText, Loader2, Save, Sparkles, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useShallow } from 'zustand/react/shallow'
 import { SDD_IMAGE_RELATIVE_DIR } from '@shared/sdd'
+import { parseSddRequirementBlocks } from '@shared/sdd-trace'
+import { useSddTrace } from '../../sdd/use-sdd-trace'
 import { useSddDraftStore } from '../../sdd/sdd-draft-store'
 import { saveActiveSddDraftToDisk, syncActiveSddDraftFromDisk } from '../../sdd/sdd-draft-actions'
 import { useWriteWorkspaceStore } from '../../write/write-workspace-store'
@@ -21,6 +23,42 @@ type Props = {
   onNext: () => void
   onClose: () => void
   nextDisabled: boolean
+}
+
+function SddRequirementProgress({ content }: { content: string }): ReactElement | null {
+  const { t } = useTranslation('common')
+  const blocks = useMemo(() => parseSddRequirementBlocks(content), [content])
+  if (blocks.length === 0) return null
+
+  const counts = { verified: 0, done: 0, building: 0, planned: 0 }
+  for (const block of blocks) {
+    if (block.status === 'verified') counts.verified += 1
+    else if (block.status === 'done') counts.done += 1
+    else if (block.status === 'building') counts.building += 1
+    else if (block.status === 'planned') counts.planned += 1
+  }
+  const total = blocks.length
+  const implemented = counts.verified + counts.done
+
+  return (
+    <div className="sdd-req-progress shrink-0 px-1 pb-1 pt-2">
+      <span className="text-[12px] font-semibold text-ds-muted">{t('sddReqProgressLabel')}</span>
+      <div className="sdd-req-progress-track" role="progressbar" aria-valuemin={0} aria-valuemax={total} aria-valuenow={implemented}>
+        {(['verified', 'done', 'building', 'planned'] as const).map((key) =>
+          counts[key] > 0 ? (
+            <span
+              key={key}
+              className={`sdd-req-progress-seg-${key}`}
+              style={{ width: `${(counts[key] / total) * 100}%` }}
+            />
+          ) : null
+        )}
+      </div>
+      <span className="text-[12px] font-medium text-ds-faint">
+        {t('sddReqProgressSummary', { done: implemented, total })}
+      </span>
+    </div>
+  )
 }
 
 function statusKey(saveStatus: string, operationStatus: string): string {
@@ -107,6 +145,12 @@ export function SddDraftEditorView({
   useEffect(() => {
     void loadWriteSettings()
   }, [loadWriteSettings])
+
+  // Trace loop: pull live build/plan progress back into requirement statuses.
+  useSddTrace({
+    workspaceRoot: activeDraft?.workspaceRoot ?? '',
+    draftRelativePath: activeDraft?.relativePath ?? null
+  })
 
   useEffect(() => {
     if (saveTimerRef.current) {
@@ -269,7 +313,9 @@ export function SddDraftEditorView({
         </header>
       </div>
 
-      <div className="min-h-0 min-w-0 flex-1 overflow-hidden pb-3 pt-3">
+      <SddRequirementProgress content={content} />
+
+      <div className="min-h-0 min-w-0 flex-1 overflow-hidden pb-3 pt-2">
         <div
           className={`sdd-editor-card relative h-full min-h-0 overflow-hidden rounded-[18px] border border-ds-border bg-ds-card/88 shadow-[0_20px_56px_rgba(15,23,42,0.06)] ${
             upgrading ? 'is-upgrading' : ''
@@ -282,6 +328,7 @@ export function SddDraftEditorView({
             filePath={activeDraft.absolutePath ?? activeDraft.relativePath}
             imageDirectory={SDD_IMAGE_RELATIVE_DIR}
             readOnly={readOnly}
+            requirementBadges
             completionModel={inlineCompletion.model}
             completionEnabled={inlineCompletion.enabled && inlineCompletionApiReady}
             completionDebounceMs={inlineCompletion.debounceMs}

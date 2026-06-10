@@ -196,6 +196,97 @@
   font-weight: 500;
 }
 
+/* SDD requirement status pills */
+.write-rich-editor .sdd-req-token-hidden {
+  display: none;
+}
+
+.write-rich-editor .sdd-req-pill {
+  display: inline-block;
+  margin-left: 0.55em;
+  padding: 0.1em 0.6em;
+  border-radius: 999px;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-size: 0.52em;
+  font-weight: 600;
+  line-height: 1.7;
+  vertical-align: middle;
+  user-select: none;
+}
+
+.write-rich-editor .sdd-req-pill-draft {
+  background: color-mix(in srgb, var(--ds-text) 8%, transparent);
+  color: var(--ds-text-muted);
+}
+
+.write-rich-editor .sdd-req-pill-planned {
+  background: color-mix(in srgb, #3b82f6 16%, transparent);
+  color: #1d4ed8;
+}
+
+.write-rich-editor .sdd-req-pill-building {
+  background: color-mix(in srgb, #f59e0b 18%, transparent);
+  color: #b45309;
+}
+
+.write-rich-editor .sdd-req-pill-done {
+  background: color-mix(in srgb, #22c55e 18%, transparent);
+  color: #15803d;
+}
+
+.write-rich-editor .sdd-req-pill-verified {
+  background: color-mix(in srgb, #14b8a6 18%, transparent);
+  color: #0f766e;
+}
+
+[data-theme='dark'] .write-rich-editor .sdd-req-pill-planned {
+  color: #93c5fd;
+}
+
+[data-theme='dark'] .write-rich-editor .sdd-req-pill-building {
+  color: #fcd34d;
+}
+
+[data-theme='dark'] .write-rich-editor .sdd-req-pill-done {
+  color: #86efac;
+}
+
+[data-theme='dark'] .write-rich-editor .sdd-req-pill-verified {
+  color: #5eead4;
+}
+
+/* SDD requirement progress bar */
+.sdd-req-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sdd-req-progress-track {
+  display: flex;
+  flex: 1 1 auto;
+  height: 6px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--ds-text) 8%, transparent);
+}
+
+.sdd-req-progress-seg-verified {
+  background: #14b8a6;
+}
+
+.sdd-req-progress-seg-done {
+  background: #22c55e;
+}
+
+.sdd-req-progress-seg-building {
+  background: #f59e0b;
+}
+
+.sdd-req-progress-seg-planned {
+  background: #3b82f6;
+}
+
 /* Inline AI: ghost text suggestion (Phase 3) */
 .write-rich-ghost-text {
   color: var(--ds-text-faint);

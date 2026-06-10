@@ -6,6 +6,8 @@ import type { ApprovalPolicy, SandboxMode } from '@shared/app-settings'
 import { parseClawCommand } from '@shared/claw-commands'
 import { DEFAULT_COMPOSER_MODEL_IDS } from '@shared/default-composer-models'
 import { buildGuiPlanId, buildPlanRelativePath } from '@shared/gui-plan'
+import { sddDraftTraceRelativePath } from '@shared/sdd'
+import { buildSddTraceSnapshot } from '@shared/sdd-trace'
 import {
   findKeyboardShortcutCommand,
   keyboardEventToShortcut,
@@ -465,7 +467,9 @@ export function Workbench(): ReactElement {
     buildGuiPlan,
     handleGuiPlanCommand,
     openGuiPlanPanel,
-    sendPlanTurn
+    replanChangedRequirements,
+    sendPlanTurn,
+    verifyGuiPlan
   } = useWorkbenchPlanController({
     blocks,
     busy,
@@ -1212,6 +1216,23 @@ export function Workbench(): ReactElement {
       sddUpgradeInFlightRef.current = false
       sddUpgradeTargetRef.current = null
       useSddDraftStore.getState().setOperationStatus('idle')
+      return
+    }
+    // Baseline the trace snapshot so later draft edits can be detected as
+    // requirement drift against the plan that is about to be generated.
+    const tracePath = sddDraftTraceRelativePath(draft.relativePath)
+    if (tracePath) {
+      await window.dsGui
+        .writeWorkspaceFile({
+          workspaceRoot: draft.workspaceRoot,
+          path: tracePath,
+          content: JSON.stringify(
+            buildSddTraceSnapshot(latestDraftContent, planRelativePath),
+            null,
+            2
+          )
+        })
+        .catch(() => undefined)
     }
   }
 
@@ -1619,6 +1640,8 @@ export function Workbench(): ReactElement {
                 className="h-full max-h-full w-full"
                 onCollapse={closeRightPanel}
                 onBuildPlan={() => void buildGuiPlan()}
+                onVerifyPlan={() => void verifyGuiPlan()}
+                onReplanChanged={(ids) => void replanChangedRequirements(ids)}
               />
             ) : (
               <WorkspaceFilePreviewPanel
