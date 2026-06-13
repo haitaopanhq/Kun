@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { DeepseekCompatModelClient } from '../src/adapters/model/deepseek-compat-model-client.js'
 import {
   makeAssistantReasoningItem,
@@ -99,7 +99,6 @@ describe('DeepseekCompatModelClient', () => {
       ['https://zenmux.ai/api/v1', 'https://zenmux.ai/api/v1/chat/completions'],
       ['https://zenmux.ai/api/v1/', 'https://zenmux.ai/api/v1/chat/completions'],
       ['https://zenmux.ai/api/v2', 'https://zenmux.ai/api/v2/chat/completions'],
-      ['https://zenmux.ai/api/v1/chat/completions', 'https://zenmux.ai/api/v1/chat/completions'],
       ['https://api.deepseek.com/beta', 'https://api.deepseek.com/v1/chat/completions'],
       ['https://api.deepseek.com', 'https://api.deepseek.com/v1/chat/completions']
     ]
@@ -150,7 +149,7 @@ describe('DeepseekCompatModelClient', () => {
       })
     }
     const client = new DeepseekCompatModelClient({
-      baseUrl: 'https://example.com/api/v1/chat/completions',
+      baseUrl: 'https://example.com/api/v1',
       apiKey: 'k',
       model: 'gpt-5-mini',
       endpointFormat: 'responses',
@@ -1723,6 +1722,7 @@ describe('DeepseekCompatModelClient', () => {
   })
 
   it('reports an error when the HTTP response is not OK', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     const providerMessage = `Not supported model ${'mimo-v2.5-pro-ultraspeed'.repeat(40)}`
     const body = JSON.stringify({ error: { code: '400', message: providerMessage } })
     const fetchImpl: typeof fetch = async () =>
@@ -1737,6 +1737,7 @@ describe('DeepseekCompatModelClient', () => {
     for await (const chunk of client.stream(buildRequest(new AbortController().signal))) {
       chunks.push(chunk)
     }
+    warn.mockRestore()
     expect(chunks[0].kind).toBe('error')
     expect(chunks[0]).toMatchObject({
       kind: 'error',
@@ -1744,6 +1745,40 @@ describe('DeepseekCompatModelClient', () => {
       code: 'http_400'
     })
     expect(JSON.stringify(chunks[0])).toContain(providerMessage)
+  })
+
+  it('adds a provider configuration hint and logs request context for HTTP 404', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const fetchImpl: typeof fetch = async () => new Response('', { status: 404 })
+    const client = new DeepseekCompatModelClient({
+      baseUrl: 'https://api.example.com/chat/completions?api_key=secret',
+      apiKey: 'k',
+      model: 'deepseek-chat',
+      endpointFormat: 'custom_endpoint',
+      fetchImpl
+    })
+    const chunks: ModelStreamChunk[] = []
+    for await (const chunk of client.stream(buildRequest(new AbortController().signal))) {
+      chunks.push(chunk)
+    }
+
+    expect(chunks[0]).toMatchObject({
+      kind: 'error',
+      message: 'model request failed with status 404: Check your model provider configuration, especially Base URL and Endpoint format.',
+      code: 'http_404'
+    })
+    expect(warn).toHaveBeenCalledWith('[kun:model] model HTTP request failed', expect.objectContaining({
+      provider: 'deepseek-compat',
+      status: 404,
+      model: 'deepseek-chat',
+      configuredModel: 'deepseek-chat',
+      baseUrl: 'https://api.example.com/chat/completions?api_key=%5Bredacted%5D',
+      requestUrl: 'https://api.example.com/chat/completions?api_key=%5Bredacted%5D',
+      endpointFormat: 'chat_completions',
+      configuredEndpointFormat: 'custom_endpoint',
+      responseBody: ''
+    }))
+    warn.mockRestore()
   })
 
   it('reports provider JSON error payloads returned with HTTP 200', async () => {

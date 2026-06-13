@@ -9,8 +9,11 @@ import { repairToolArguments } from './tool-argument-repair.js'
 import { isDeepSeekHost, probeDeepSeekReachable } from './model-error-probe.js'
 import {
   DEFAULT_MODEL_ENDPOINT_FORMAT,
+  isCustomModelEndpointFormat,
   modelEndpointPath,
   normalizeModelEndpointFormat,
+  resolveModelEndpointFormat,
+  usesChatCompletionsShape,
   type ModelEndpointFormat
 } from '../../contracts/model-endpoint-format.js'
 
@@ -167,11 +170,19 @@ export class DeepseekCompatModelClient implements ModelClient {
       yield { kind: 'error', message: 'request was aborted before start' }
       return
     }
-    const endpointFormat = this.endpointFormat()
-    const url = buildModelEndpointUrl(this.config.baseUrl, endpointFormat)
+    const configuredEndpointFormat = this.endpointFormat()
+    const endpointFormat = resolveModelEndpointFormat(configuredEndpointFormat, this.config.baseUrl)
+    if (!endpointFormat) {
+      yield {
+        kind: 'error',
+        message: 'custom full endpoint URL must end with /chat/completions, /completions, /responses, or /messages'
+      }
+      return
+    }
+    const url = buildModelEndpointUrl(this.config.baseUrl, configuredEndpointFormat)
     const stream = request.stream ?? !this.config.nonStreaming
     const requestModel = request.model?.trim() || this.config.model
-    const body = this.buildRequestBody(request, stream)
+    const body = this.buildRequestBody(request, stream, { endpointFormat })
     const headers = this.buildHeaders(stream, endpointFormat)
     const result = await this.postChatCompletion(url, headers, body, request.abortSignal)
     if (result.kind === 'error') {
@@ -181,8 +192,8 @@ export class DeepseekCompatModelClient implements ModelClient {
     let response = result.response
     if (!response.ok) {
       const text = await response.text()
-      if (endpointFormat === 'chat_completions' && shouldRetryWithoutStreamUsage(response.status, text, body)) {
-        const retryBody = this.buildRequestBody(request, stream, { includeStreamUsage: false })
+      if (usesChatCompletionsShape(endpointFormat) && shouldRetryWithoutStreamUsage(response.status, text, body)) {
+        const retryBody = this.buildRequestBody(request, stream, { endpointFormat, includeStreamUsage: false })
         const retry = await this.postChatCompletion(url, headers, retryBody, request.abortSignal)
         if (retry.kind === 'error') {
           yield { kind: 'error', message: retry.message }
@@ -203,6 +214,14 @@ export class DeepseekCompatModelClient implements ModelClient {
           return
         }
         const retryText = await response.text()
+        this.logHttpFailure({
+          url,
+          status: response.status,
+          body: retryText,
+          endpointFormat,
+          configuredEndpointFormat,
+          model: requestModel
+        })
         const retryClassified = await this.classifyHttpError(response.status, retryText)
         yield {
           kind: 'error',
@@ -211,6 +230,14 @@ export class DeepseekCompatModelClient implements ModelClient {
         }
         return
       }
+      this.logHttpFailure({
+        url,
+        status: response.status,
+        body: text,
+        endpointFormat,
+        configuredEndpointFormat,
+        model: requestModel
+      })
       const classified = await this.classifyHttpError(response.status, text)
       yield {
         kind: 'error',
@@ -281,6 +308,13 @@ export class DeepseekCompatModelClient implements ModelClient {
 
   private async classifyHttpError(status: number, text: string): Promise<{ message: string; code: string }> {
     const body = text
+    if (status === 404) {
+      const prefix = body ? `${body} ` : ''
+      return {
+        message: `model request failed with status 404: ${prefix}Check your model provider configuration, especially Base URL and Endpoint format.`,
+        code: 'http_404'
+      }
+    }
     if (status === 429) {
       return {
         message: `model request was rate limited (HTTP 429): ${body}`,
@@ -303,15 +337,36 @@ export class DeepseekCompatModelClient implements ModelClient {
     }
   }
 
+  private logHttpFailure(input: {
+    url: string
+    status: number
+    body: string
+    endpointFormat: ModelEndpointFormat
+    configuredEndpointFormat: ModelEndpointFormat
+    model: string
+  }): void {
+    console.warn('[kun:model] model HTTP request failed', {
+      provider: this.provider,
+      status: input.status,
+      model: input.model,
+      configuredModel: this.config.model,
+      baseUrl: redactUrlForLog(this.config.baseUrl),
+      requestUrl: redactUrlForLog(input.url),
+      endpointFormat: input.endpointFormat,
+      configuredEndpointFormat: input.configuredEndpointFormat,
+      responseBody: summarizeForLog(input.body)
+    })
+  }
+
   private buildRequestBody(
     request: ModelRequest,
     stream: boolean,
-    options: { includeStreamUsage?: boolean } = {}
+    options: { endpointFormat?: ModelEndpointFormat; includeStreamUsage?: boolean } = {}
   ): Record<string, unknown> {
     const requestModel = request.model?.trim()
     const model = requestModel || this.config.model
     const messages = this.collectMessages(request, model)
-    const endpointFormat = this.endpointFormat()
+    const endpointFormat = options.endpointFormat ?? this.endpointFormat()
     if (endpointFormat === 'responses') {
       return this.buildResponsesRequestBody(request, model, messages, stream)
     }
@@ -1555,29 +1610,46 @@ function responsesReasoningForEffort(
 }
 
 function buildModelEndpointUrl(baseUrl: string, endpointFormat: ModelEndpointFormat): string {
+  if (isCustomModelEndpointFormat(endpointFormat)) return exactModelEndpointUrl(baseUrl)
   const path = modelEndpointPath(endpointFormat)
   const normalized = baseUrl.trim().replace(/\/+$/, '')
   if (!normalized) return `/v1/${path}`
-  if (normalized.toLowerCase().endsWith(`/${path}`)) return normalized
-  const withoutEndpoint = stripKnownEndpointPath(normalized)
-  const lastSegment = withoutEndpoint.split('/').pop()?.toLowerCase() ?? ''
+  const lastSegment = normalized.split('/').pop()?.toLowerCase() ?? ''
   if (lastSegment === 'beta') {
-    return `${withoutEndpoint.slice(0, -'/beta'.length)}/v1/${path}`
+    return `${normalized.slice(0, -'/beta'.length)}/v1/${path}`
   }
   if (/^v\d+$/.test(lastSegment)) {
-    return `${withoutEndpoint}/${path}`
+    return `${normalized}/${path}`
   }
-  return `${withoutEndpoint}/v1/${path}`
+  return `${normalized}/v1/${path}`
 }
 
-function stripKnownEndpointPath(baseUrl: string): string {
-  const lower = baseUrl.toLowerCase()
-  for (const path of ['chat/completions', 'responses', 'messages']) {
-    if (lower.endsWith(`/${path}`)) {
-      return baseUrl.slice(0, -path.length).replace(/\/+$/, '')
+function exactModelEndpointUrl(baseUrl: string): string {
+  const trimmed = baseUrl.trim()
+  const query = trimmed.search(/[?#]/)
+  if (query < 0) return trimmed.replace(/\/+$/, '')
+  return `${trimmed.slice(0, query).replace(/\/+$/, '')}${trimmed.slice(query)}`
+}
+
+function redactUrlForLog(url: string): string {
+  const trimmed = url.trim()
+  if (!trimmed) return ''
+  try {
+    const parsed = new URL(trimmed)
+    for (const key of [...parsed.searchParams.keys()]) {
+      if (/(key|token|secret|signature|auth|password)/i.test(key)) {
+        parsed.searchParams.set(key, '[redacted]')
+      }
     }
+    return parsed.toString()
+  } catch {
+    return trimmed.replace(/([?&][^=&]*(?:key|token|secret|signature|auth|password)[^=]*=)[^&#]*/gi, '$1[redacted]')
   }
-  return baseUrl
+}
+
+function summarizeForLog(text: string): string {
+  const normalized = text.replace(/\s+/g, ' ').trim()
+  return normalized.length > 1_000 ? `${normalized.slice(0, 1_000)}...` : normalized
 }
 
 function buildChatCompletionsUrl(baseUrl: string): string {

@@ -18,6 +18,7 @@ import {
   buildComposerModelMenuGroups,
   calculateFloatingMenuPlacement,
   calculateFloatingSubmenuPlacement,
+  composerModelMenuItemSelected,
   composerMenuSupportsModel,
   composerReasoningEffortRequestValue,
   normalizeComposerReasoningEffort
@@ -322,6 +323,53 @@ describe('FloatingComposer model controls', () => {
       label: 'Other models',
       modelIds: ['loose-model']
     })
+  })
+
+  it('deduplicates models within a provider but keeps the same model id across providers', () => {
+    const groups = buildComposerModelMenuGroups({
+      composerModelGroups: [
+        {
+          providerId: 'deepseek',
+          label: 'DeepSeek',
+          modelIds: ['deepseek-v4-pro', 'deepseek-v4-pro'],
+          modelProfiles: {}
+        },
+        {
+          providerId: 'custom-provider-3',
+          label: 'test',
+          modelIds: ['deepseek-v4-pro'],
+          modelProfiles: {}
+        }
+      ],
+      modelOptions: ['deepseek-v4-pro'],
+      ungroupedLabel: 'Other models'
+    })
+
+    expect(groups).toEqual([
+      expect.objectContaining({
+        providerId: 'deepseek',
+        modelIds: ['deepseek-v4-pro']
+      }),
+      expect.objectContaining({
+        providerId: 'custom-provider-3',
+        modelIds: ['deepseek-v4-pro']
+      })
+    ])
+  })
+
+  it('selects duplicate model ids by provider and model id together', () => {
+    expect(composerModelMenuItemSelected({
+      groupProviderId: 'deepseek',
+      selectedProviderId: 'deepseek',
+      currentModel: 'deepseek-v4-pro',
+      modelId: 'deepseek-v4-pro'
+    })).toBe(true)
+    expect(composerModelMenuItemSelected({
+      groupProviderId: 'custom-provider-3',
+      selectedProviderId: 'deepseek',
+      currentModel: 'deepseek-v4-pro',
+      modelId: 'deepseek-v4-pro'
+    })).toBe(false)
   })
 
   it('keeps the reasoning strength visible in the model control', () => {
