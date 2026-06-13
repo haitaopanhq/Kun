@@ -1,17 +1,20 @@
 import i18n from '../i18n'
 
-const DEFAULT_WORKSPACE_PATH_SUFFIX = '/.deepseekgui/default_workspace'
 const DEFAULT_WORKSPACE_LABEL = 'default'
 
 function normalizePathForMatch(path: string): string {
   return path.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase()
 }
 
+// 新旧两代默认工作区路径都按 “default” 标签展示(老安装在迁移完成前
+// 仍会持有 ~/.deepseekgui 形式的路径)。
 function isDefaultWorkspacePath(path: string): boolean {
   const normalized = normalizePathForMatch(path)
   return (
-    normalized === '~/.deepseekgui/default_workspace'
-    || normalized.endsWith(DEFAULT_WORKSPACE_PATH_SUFFIX)
+    normalized === '~/.kun/default_workspace'
+    || normalized.endsWith('/.kun/default_workspace')
+    || normalized === '~/.deepseekgui/default_workspace'
+    || normalized.endsWith('/.deepseekgui/default_workspace')
   )
 }
 

@@ -40,9 +40,11 @@ import { WriteFileTree } from './WriteFileTree'
 type Props = {
   activeView: 'chat' | 'write' | 'claw' | 'schedule'
   connectPhoneSidebarOpen: boolean
+  ikunModeEnabled: boolean
   onCodeOpen: () => void
   onWriteOpen: () => void
   onOpenSettings: (section?: SettingsRouteSection) => void
+  onToggleIkunMode: () => void
   onToggleConnectPhone: () => void
   onToggleSidebar: () => void
 }
@@ -58,9 +60,11 @@ type Translate = (key: string, opts?: Record<string, unknown>) => string
 export function WriteSidebar({
   activeView,
   connectPhoneSidebarOpen,
+  ikunModeEnabled,
   onCodeOpen,
   onWriteOpen,
   onOpenSettings,
+  onToggleIkunMode,
   onToggleConnectPhone,
   onToggleSidebar
 }: Props): ReactElement {
@@ -219,10 +223,10 @@ export function WriteSidebar({
   const pickWriteWorkspace = async (): Promise<void> => {
     try {
       setFileError(null)
-      if (typeof window.dsGui?.pickWorkspaceDirectory !== 'function') {
+      if (typeof window.kunGui?.pickWorkspaceDirectory !== 'function') {
         throw new Error('workspace:pick-directory unavailable')
       }
-      const picked = await window.dsGui.pickWorkspaceDirectory(workspaceRoot || defaultWorkspaceRoot || undefined)
+      const picked = await window.kunGui.pickWorkspaceDirectory(workspaceRoot || defaultWorkspaceRoot || undefined)
       if (!picked.canceled && picked.path) {
         await addWriteWorkspace(picked.path)
         if (runtimeConnection === 'ready') void ensureWriteThreadForWorkspace(picked.path)
@@ -281,7 +285,9 @@ export function WriteSidebar({
       <div className="ds-no-drag flex flex-col px-0.5">
         <WorkspaceModeTabs
           activeView={activeView}
+          ikunModeEnabled={ikunModeEnabled}
           onCodeOpen={onCodeOpen}
+          onToggleIkunMode={onToggleIkunMode}
           onWriteOpen={onWriteOpen}
         />
         <SidebarCommandRow

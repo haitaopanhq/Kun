@@ -237,7 +237,7 @@ export function WriteWorkspaceView({
       setFileError(t(selection.ranges.length > 1 ? 'writeInlineEditMultiSelection' : 'writeInlineEditNoSelection'))
       return
     }
-    if (typeof window.dsGui?.requestWriteInlineCompletion !== 'function') {
+    if (typeof window.kunGui?.requestWriteInlineCompletion !== 'function') {
       setFileError(t('writeInlineEditUnavailable'))
       return
     }
@@ -259,7 +259,7 @@ export function WriteWorkspaceView({
 
     setInlineEditInFlight(true)
     try {
-      const result = await window.dsGui.requestWriteInlineCompletion(
+      const result = await window.kunGui.requestWriteInlineCompletion(
         buildWriteInlineEditCompletionRequest(draft.request)
       )
       if (!result.ok) {
@@ -345,7 +345,7 @@ export function WriteWorkspaceView({
       setFileError(t('writeInlineEditNoSelection'))
       return
     }
-    if (typeof window.dsGui?.generateWriteInfographic !== 'function') {
+    if (typeof window.kunGui?.generateWriteInfographic !== 'function') {
       setFileError(t('writeInfographicUnavailable'))
       return
     }
@@ -353,7 +353,7 @@ export function WriteWorkspaceView({
     const richHandle = richModeActive ? richHandleRef.current : null
     setInfographicInFlight(true)
     try {
-      const result = await window.dsGui.generateWriteInfographic({
+      const result = await window.kunGui.generateWriteInfographic({
         text: selection.text.trim().slice(0, WRITE_INFOGRAPHIC_MAX_TEXT_CHARS),
         filePath: activeFilePath,
         workspaceRoot
@@ -414,10 +414,10 @@ export function WriteWorkspaceView({
   const pickWriteWorkspace = async (): Promise<void> => {
     try {
       setFileError(null)
-      if (typeof window.dsGui?.pickWorkspaceDirectory !== 'function') {
+      if (typeof window.kunGui?.pickWorkspaceDirectory !== 'function') {
         throw new Error('workspace:pick-directory unavailable')
       }
-      const picked = await window.dsGui.pickWorkspaceDirectory(workspaceRoot || undefined)
+      const picked = await window.kunGui.pickWorkspaceDirectory(workspaceRoot || undefined)
       if (!picked.canceled && picked.path) {
         await addWriteWorkspace(picked.path)
         if (runtimeConnection === 'ready') void ensureWriteThreadForWorkspace(picked.path)
@@ -430,7 +430,7 @@ export function WriteWorkspaceView({
   const exportCurrentFile = async (format: WriteExportFormat): Promise<void> => {
     if (!activeFilePath) return
     if (!activeFileIsText) return
-    if (typeof window.dsGui?.exportWriteDocument !== 'function') {
+    if (typeof window.kunGui?.exportWriteDocument !== 'function') {
       showExportNotice({ tone: 'error', message: t('writeExportUnavailable') })
       return
     }
@@ -438,7 +438,7 @@ export function WriteWorkspaceView({
     setExportMenuOpen(false)
     setExportingFormat(format)
     try {
-      const result = await window.dsGui.exportWriteDocument({
+      const result = await window.kunGui.exportWriteDocument({
         path: activeFilePath,
         workspaceRoot,
         format,
@@ -476,7 +476,7 @@ export function WriteWorkspaceView({
   const copyCurrentFileAsRichText = async (): Promise<void> => {
     if (!activeFilePath) return
     if (!activeFileIsText) return
-    if (typeof window.dsGui?.copyWriteDocumentAsRichText !== 'function') {
+    if (typeof window.kunGui?.copyWriteDocumentAsRichText !== 'function') {
       showExportNotice({ tone: 'error', message: t('writeCopyRichTextUnavailable') })
       return
     }
@@ -484,7 +484,7 @@ export function WriteWorkspaceView({
     setExportMenuOpen(false)
     setExportingFormat(WRITE_RICH_CLIPBOARD_ACTION)
     try {
-      const result = await window.dsGui.copyWriteDocumentAsRichText({
+      const result = await window.kunGui.copyWriteDocumentAsRichText({
         path: activeFilePath,
         workspaceRoot,
         content: fileContent
@@ -619,15 +619,15 @@ export function WriteWorkspaceView({
   useEffect(() => {
     if (!activeFilePath || !workspaceRoot.trim() || (!activeFileIsText && !activeFileIsImage)) return
     if (
-      typeof window.dsGui?.watchWorkspaceFile !== 'function' ||
-      typeof window.dsGui?.unwatchWorkspaceFile !== 'function' ||
-      typeof window.dsGui?.onWorkspaceFileChanged !== 'function'
+      typeof window.kunGui?.watchWorkspaceFile !== 'function' ||
+      typeof window.kunGui?.unwatchWorkspaceFile !== 'function' ||
+      typeof window.kunGui?.onWorkspaceFileChanged !== 'function'
     ) {
       return
     }
 
     return startWriteWorkspaceFileWatch({
-      api: window.dsGui,
+      api: window.kunGui,
       workspaceRoot,
       path: activeFilePath,
       kind: activeFileIsImage ? 'image' : 'text',

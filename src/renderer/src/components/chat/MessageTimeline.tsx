@@ -7,7 +7,7 @@ import { useTimelineStores } from './use-timeline-stores'
 import { useTimelineScroll } from './use-timeline-scroll'
 import { deriveTurnSections } from './derive-turn-sections'
 import { MessageTimelineEmptyHero, ThreadForkBanner, ThreadForkPoint } from './message-timeline-empty'
-import { MessageBubble } from './message-timeline-bubbles'
+import { GeneratedFilesPanel, MessageBubble } from './message-timeline-bubbles'
 import { ReviewPlanCard, ReviewSummaryCard, TurnChangeSummary, WorkMetaRow } from './message-timeline-cards'
 import { ProcessSectionRow, groupProcessSections } from './message-timeline-process'
 import { AnimatedWorkLogo } from './AnimatedWorkLogo'
@@ -317,7 +317,7 @@ function MessageTurn({
   const [workExpandedOverride, setWorkExpandedOverride] = useState<boolean | null>(null)
   const workExpanded = workExpandedOverride ?? isProcessing
 
-  const { processBlocks, assistantContentBlocks, turnFileChanges } = useMemo(
+  const { processBlocks, assistantContentBlocks, generatedFileBlocks, turnFileChanges } = useMemo(
     () =>
       deriveTurnSections({
         turn,
@@ -386,6 +386,8 @@ function MessageTurn({
       {showLiveAssistant ? (
         <MessageBubble block={{ kind: 'assistant', id: 'live-assistant', text: liveContent }} />
       ) : null}
+
+      <GeneratedFilesPanel blocks={generatedFileBlocks} />
 
       {reviewBlocks.map((review) => (
         <ReviewSummaryCard key={review.id} review={review} />

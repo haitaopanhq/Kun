@@ -53,8 +53,8 @@ export function WriteImagePreview({
     setDimensions(null)
   }, [src, filePath])
   const openImage = (): void => {
-    if (typeof window.dsGui?.openEditorPath !== 'function') return
-    void window.dsGui.openEditorPath({ path: filePath, workspaceRoot, editorId: 'system' }).catch(() => undefined)
+    if (typeof window.kunGui?.openEditorPath !== 'function') return
+    void window.kunGui.openEditorPath({ path: filePath, workspaceRoot, editorId: 'system' }).catch(() => undefined)
   }
 
   return (

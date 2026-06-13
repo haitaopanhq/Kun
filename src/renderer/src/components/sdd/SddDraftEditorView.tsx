@@ -183,15 +183,15 @@ export function SddDraftEditorView({
   useEffect(() => {
     if (!activeDraftId || !activeDraftWorkspaceRoot || !activeDraftRelativePath) return
     if (
-      typeof window.dsGui?.watchWorkspaceFile !== 'function' ||
-      typeof window.dsGui?.unwatchWorkspaceFile !== 'function' ||
-      typeof window.dsGui?.onWorkspaceFileChanged !== 'function'
+      typeof window.kunGui?.watchWorkspaceFile !== 'function' ||
+      typeof window.kunGui?.unwatchWorkspaceFile !== 'function' ||
+      typeof window.kunGui?.onWorkspaceFileChanged !== 'function'
     ) {
       return
     }
 
     return startWriteWorkspaceFileWatch({
-      api: window.dsGui,
+      api: window.kunGui,
       workspaceRoot: activeDraftWorkspaceRoot,
       path: activeDraftAbsolutePath ?? activeDraftRelativePath,
       kind: 'text',

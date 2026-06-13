@@ -9,7 +9,7 @@ import {
   type AppSettingsV1
 } from '../shared/app-settings'
 import { DEFAULT_COMPOSER_MODEL_IDS } from '../shared/default-composer-models'
-import type { ModelProviderModelGroup } from '../shared/ds-gui-api'
+import type { ModelProviderModelGroup } from '../shared/kun-gui-api'
 import { upstreamOpenAiModelsUrl } from '../shared/openai-compat-url'
 
 export type FetchUpstreamModelsResult =

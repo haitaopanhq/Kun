@@ -39,13 +39,13 @@ describe('MessageTimeline initial heatmap empty hero routing', () => {
 
   it('keeps offline, missing-workspace, and Claw empty states gated away from the heatmap', () => {
     const offlineHtml = renderHero({ ready: false })
-    expect(offlineHtml).toContain('DeepSeek-GUI is waking the local agent')
+    expect(offlineHtml).toContain('Kun is waking the local agent')
     expect(offlineHtml).toContain('ds-runtime-wake-logo')
     expect(offlineHtml).toContain('ds-work-logo')
     expect(renderHero({ hasWorkspace: false })).toContain('Choose working directory')
     const clawHtml = renderHero({ route: 'claw' })
     expect(clawHtml).toContain('Start a conversation with this assistant')
-    expect(clawHtml).toContain('ds-claw-empty-whale-logo')
+    expect(clawHtml).toContain('ds-claw-empty-kun-logo')
     expect(clawHtml).toContain('ds-work-logo')
     expect(clawHtml).not.toContain('Kun usage')
   })

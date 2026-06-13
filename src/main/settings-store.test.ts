@@ -28,7 +28,7 @@ describe('JsonSettingsStore', () => {
     const store = new JsonSettingsStore(userDataDir)
     const loaded = await store.load()
 
-    expect(loaded.write.defaultWorkspaceRoot).toContain('.deepseekgui')
+    expect(loaded.write.defaultWorkspaceRoot).toContain('.kun')
     expect(loaded.write.workspaces).toContain(loaded.write.defaultWorkspaceRoot)
     expect(loaded.write.inlineCompletion.enabled).toBe(true)
     expect(loaded.write.inlineCompletion.retrievalEnabled).toBe(true)
@@ -210,8 +210,8 @@ describe('JsonSettingsStore', () => {
   it('loads settings from the legacy lowercase userData directory and writes them into the current path', async () => {
     const supportRoot = await mkdtemp(join(tmpdir(), 'ds-gui-settings-compat-'))
     const legacyUserDataDir = join(supportRoot, 'deepseek-gui')
-    const currentUserDataDir = join(supportRoot, 'DeepSeek GUI')
-    const currentSettingsPath = join(currentUserDataDir, 'deepseek-gui-settings.json')
+    const currentUserDataDir = join(supportRoot, 'Kun')
+    const currentSettingsPath = join(currentUserDataDir, 'kun-settings.json')
 
     await mkdir(legacyUserDataDir, { recursive: true })
     await writeFile(
@@ -284,8 +284,28 @@ describe('JsonSettingsStore', () => {
     expect(loaded.workspaceRoot.length).toBeGreaterThan(0)
     expect(backupName).toBeTruthy()
     expect(await readFile(join(userDataDir, backupName ?? ''), 'utf8')).toBe('{ invalid json')
-    const replaced = await readFile(settingsPath, 'utf8')
+    // 兜底默认值写进新文件名;旧文件保留原状(已经另有 invalid 备份)。
+    const replaced = await readFile(join(userDataDir, 'kun-settings.json'), 'utf8')
     expect(() => JSON.parse(replaced)).not.toThrow()
+  })
+
+  it('loads the legacy file name inside the current userData dir and re-saves it under the new name', async () => {
+    // userData 整目录迁移后的常见形态:目录已经叫 Kun,里面还是旧文件名。
+    const userDataDir = await mkdtemp(join(tmpdir(), 'ds-gui-settings-'))
+    await writeFile(
+      join(userDataDir, 'deepseek-gui-settings.json'),
+      JSON.stringify({ version: 1, provider: { apiKey: 'sk-migrated' } }),
+      'utf8'
+    )
+
+    const store = new JsonSettingsStore(userDataDir)
+    const loaded = await store.load()
+
+    expect(loaded.provider.apiKey).toBe('sk-migrated')
+    const rewritten = await readFile(join(userDataDir, 'kun-settings.json'), 'utf8')
+    expect(rewritten).toContain('sk-migrated')
+    // 旧文件保留,回滚老版本时仍可读。
+    expect(await readFile(join(userDataDir, 'deepseek-gui-settings.json'), 'utf8')).toContain('sk-migrated')
   })
 
   it('throws for non-recoverable read errors', async () => {
@@ -348,7 +368,7 @@ describe('JsonSettingsStore', () => {
 
   it('omits agentProvider when writing normalized settings to disk', async () => {
     const userDataDir = await mkdtemp(join(tmpdir(), 'ds-gui-settings-'))
-    const settingsPath = join(userDataDir, 'deepseek-gui-settings.json')
+    const settingsPath = join(userDataDir, 'kun-settings.json')
     const store = new JsonSettingsStore(userDataDir)
     await store.load()
     await store.patch({
@@ -458,7 +478,7 @@ describe('JsonSettingsStore', () => {
 
       // Final file is present and non-empty.
       const finalContents = await readFile(
-        join(userDataDir, 'deepseek-gui-settings.json'),
+        join(userDataDir, 'kun-settings.json'),
         'utf8'
       )
       expect(finalContents.length).toBeGreaterThan(0)

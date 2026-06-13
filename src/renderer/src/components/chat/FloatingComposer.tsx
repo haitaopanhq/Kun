@@ -35,7 +35,7 @@ import {
   X
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import type { ModelProviderModelGroup } from '@shared/ds-gui-api'
+import type { ModelProviderModelGroup } from '@shared/kun-gui-api'
 import type { WorkspaceEntry } from '@shared/workspace-file'
 import type { AttachmentReference, ReviewTarget } from '../../agent/types'
 import { useChatStore } from '../../store/chat-store'
@@ -353,7 +353,7 @@ async function loadWorkspaceFileIndex(workspaceRoot: string): Promise<WorkspaceF
       const current = queue.shift()
       if (!current) break
       visitedDirectories += 1
-      const result = await window.dsGui.listWorkspaceDirectory({
+      const result = await window.kunGui.listWorkspaceDirectory({
         workspaceRoot: root,
         path: current.path
       })
@@ -1299,7 +1299,7 @@ export function FloatingComposer({
       const paths: string[] = []
       for (const file of pathFiles) {
         try {
-          const path = window.dsGui.getPathForFile(file)
+          const path = window.kunGui.getPathForFile(file)
           if (path) paths.push(path)
         } catch {
           // ignore files we cannot resolve a filesystem path for

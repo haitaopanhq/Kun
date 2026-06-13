@@ -148,11 +148,11 @@ function imNewTopicText(settings: AppSettingsV1): string {
  */
 export function imWelcomeText(settings: AppSettingsV1, channel?: ClawImChannelV1): string {
   const profile = channel?.agentProfile
-  const name = profile?.name.trim() || channel?.label.trim() || 'DeepSeek GUI'
+  const name = profile?.name.trim() || channel?.label.trim() || 'Kun'
   const description = profile?.description.trim() ?? ''
   if (isChineseLocale(settings)) {
     return [
-      `你好，我是 ${name}，通过 DeepSeek GUI 连接到这个对话的 AI 助手。`,
+      `你好，我是 ${name}，通过 Kun 连接到这个对话的 AI 助手。`,
       ...(description ? [description] : []),
       '你可以直接发消息让我帮忙：回答问题、查资料、读写已连接电脑工作区里的文件、生成文档等，完成后我会在这里回复你。',
       imCommandHelpText(settings),
@@ -160,7 +160,7 @@ export function imWelcomeText(settings: AppSettingsV1, channel?: ClawImChannelV1
     ].join('\n\n')
   }
   return [
-    `Hi, I am ${name}, an AI assistant connected to this chat through DeepSeek GUI.`,
+    `Hi, I am ${name}, an AI assistant connected to this chat through Kun.`,
     ...(description ? [description] : []),
     'Send me a message and I will handle it on the connected computer: answering questions, research, reading and writing workspace files, generating documents — I reply here once done.',
     imCommandHelpText(settings),
@@ -1425,7 +1425,7 @@ export class ClawRuntime {
           appSecret,
           domain: domain === 'lark' ? Domain.Lark : Domain.Feishu,
           loggerLevel: LoggerLevel.warn,
-          source: 'deepseek-gui',
+          source: 'kun',
           transport: 'websocket',
           policy: {
             dmMode: 'open',
@@ -1575,9 +1575,10 @@ export class ClawRuntime {
       }
       if (im.secret) {
         const auth = req.headers.authorization ?? ''
-        const headerSecret = Array.isArray(req.headers['x-deepseek-gui-secret'])
-          ? req.headers['x-deepseek-gui-secret'][0]
-          : req.headers['x-deepseek-gui-secret']
+        // 新名字 x-kun-secret 优先;旧名字 x-deepseek-gui-secret 已配置
+        // 在外部系统里,属于对外契约,必须长期兼容。
+        const rawHeaderSecret = req.headers['x-kun-secret'] ?? req.headers['x-deepseek-gui-secret']
+        const headerSecret = Array.isArray(rawHeaderSecret) ? rawHeaderSecret[0] : rawHeaderSecret
         if (auth !== `Bearer ${im.secret}` && headerSecret !== im.secret) {
           writeJson(res, 401, { ok: false, message: 'Unauthorized.' })
           return

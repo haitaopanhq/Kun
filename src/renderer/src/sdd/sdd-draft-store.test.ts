@@ -8,7 +8,7 @@ import {
 } from './sdd-draft-store'
 import { saveActiveSddDraftToDisk, syncActiveSddDraftFromDisk } from './sdd-draft-actions'
 
-const SDD_DRAFT_REGISTRY_STORAGE_KEY = 'deepseekgui.sdd.draft.registry.v1'
+const SDD_DRAFT_REGISTRY_STORAGE_KEY = 'kun.sdd.draft.registry.v1'
 
 function createMemoryStorage(): Storage {
   const items = new Map<string, string>()
@@ -33,7 +33,7 @@ describe('sdd-draft-store', () => {
     vi.stubGlobal('localStorage', createMemoryStorage())
     vi.stubGlobal('window', {
       localStorage,
-      dsGui: {
+      kunGui: {
         writeWorkspaceFile: vi.fn()
       }
     })
@@ -199,7 +199,7 @@ describe('sdd-draft-store', () => {
       path: '/tmp/app/.kunsdd/draft/123e4567-e89b-12d3-a456-426614174000/requirement.md',
       savedAt: '2026-01-01T00:00:00.000Z'
     })
-    window.dsGui.writeWorkspaceFile = writeWorkspaceFile
+    window.kunGui.writeWorkspaceFile = writeWorkspaceFile
     const draft = createSddDraft({
       id: '123e4567-e89b-12d3-a456-426614174000',
       workspaceRoot: '/tmp/app',
@@ -270,7 +270,7 @@ describe('sdd-draft-store', () => {
   })
 
   it('keeps the draft dirty when disk save fails', async () => {
-    window.dsGui.writeWorkspaceFile = vi.fn().mockResolvedValue({
+    window.kunGui.writeWorkspaceFile = vi.fn().mockResolvedValue({
       ok: false,
       message: 'write failed'
     })

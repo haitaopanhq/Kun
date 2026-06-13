@@ -15,9 +15,16 @@ import type {
 import { nextGuiUpdateCheckDelay } from '../shared/gui-update-schedule'
 import { DEFAULT_GUI_UPDATE_CHANNEL, normalizeGuiUpdateChannel } from '../shared/gui-update'
 
+// 更新源域名与 R2 prefix 保持旧值:线上还在运行的 DeepSeek GUI 老版本
+// 轮询的就是这条 feed 路径,改了它们就收不到 Kun 的升级包。品牌改名
+// 只改产物文件名(latest*.yml 内容指向新文件名,新老客户端都能下载)。
 const DEFAULT_R2_PUBLIC_BASE_URL = 'https://deepseek-gui.com/api/r2'
 const DEFAULT_R2_RELEASE_PREFIX = 'deepseek-gui'
 const { autoUpdater } = electronUpdater
+
+function envWithLegacyFallback(kunName: string, legacyName: string): string {
+  return process.env[kunName]?.trim() || process.env[legacyName]?.trim() || ''
+}
 
 let initialized = false
 let getMainWindow: (() => BrowserWindow | null) | null = null
@@ -26,7 +33,7 @@ let lastState: GuiUpdateState = { status: 'idle' }
 let downloaded = false
 let downloadPromise: Promise<string[]> | null = null
 let configuredChannel: GuiUpdateChannel = normalizeGuiUpdateChannel(
-  process.env.DEEPSEEK_GUI_UPDATE_CHANNEL?.trim()
+  envWithLegacyFallback('KUN_UPDATE_CHANNEL', 'DEEPSEEK_GUI_UPDATE_CHANNEL') || undefined
 )
 let configuredFeedUrl = ''
 let getSelectedChannel: (() => GuiUpdateChannel | Promise<GuiUpdateChannel>) | null = null
@@ -52,8 +59,11 @@ function joinUrl(base: string, ...parts: string[]): string {
 }
 
 function envUpdateUrl(channel: GuiUpdateChannel): string {
-  const channelSpecific = process.env[`DEEPSEEK_GUI_UPDATE_URL_${channel.toUpperCase()}`]?.trim()
-  const direct = channelSpecific || process.env.DEEPSEEK_GUI_UPDATE_URL?.trim() || ''
+  const channelSpecific = envWithLegacyFallback(
+    `KUN_UPDATE_URL_${channel.toUpperCase()}`,
+    `DEEPSEEK_GUI_UPDATE_URL_${channel.toUpperCase()}`
+  )
+  const direct = channelSpecific || envWithLegacyFallback('KUN_UPDATE_URL', 'DEEPSEEK_GUI_UPDATE_URL')
   return direct ? direct.replace(/\{channel\}/g, channel).replace(/\/?$/, '/') : ''
 }
 
@@ -307,7 +317,7 @@ async function runScheduledGuiUpdateCheck(): Promise<void> {
       await writeLastScheduledCheckAt(nowMs)
       await checkGuiUpdate()
     } catch (error) {
-      console.warn('[deepseek-gui updater] scheduled GUI update check failed:', error)
+      console.warn('[kun-gui updater] scheduled GUI update check failed:', error)
     } finally {
       backgroundCheckPromise = null
       void scheduleNextBackgroundCheck()
@@ -353,7 +363,7 @@ async function checkManualUpdate(
     const res = await fetch(url, {
       headers: {
         Accept: 'application/x-yaml,text/yaml,text/plain,*/*',
-        'User-Agent': `deepseek-gui/${currentVersion}`
+        'User-Agent': `kun/${currentVersion}`
       }
     })
     if (!res.ok) {
@@ -423,9 +433,9 @@ export function initializeGuiUpdater(
   }
 
   autoUpdater.logger = {
-    info: (message?: unknown) => console.info('[deepseek-gui updater]', message),
-    warn: (message?: unknown) => console.warn('[deepseek-gui updater]', message),
-    error: (message?: unknown) => console.error('[deepseek-gui updater]', message)
+    info: (message?: unknown) => console.info('[kun-gui updater]', message),
+    warn: (message?: unknown) => console.warn('[kun-gui updater]', message),
+    error: (message?: unknown) => console.error('[kun-gui updater]', message)
   }
 
   autoUpdater.on('checking-for-update', () => {
@@ -464,7 +474,7 @@ export function initializeGuiUpdater(
 
   nativeAutoUpdater?.on?.('before-quit-for-update', () => {
     void runBeforeInstallUpdate().catch((error) => {
-      console.warn('[deepseek-gui updater] failed to stop runtimes before update quit:', error)
+      console.warn('[kun-gui updater] failed to stop runtimes before update quit:', error)
     })
   })
 

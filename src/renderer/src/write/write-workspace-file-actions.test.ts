@@ -67,9 +67,9 @@ function createHarness(): {
   return { actions, get }
 }
 
-function installDsGui(overrides: Partial<Window['dsGui']>): void {
+function installDsGui(overrides: Partial<Window['kunGui']>): void {
   vi.stubGlobal('window', {
-    dsGui: overrides
+    kunGui: overrides
   })
 }
 

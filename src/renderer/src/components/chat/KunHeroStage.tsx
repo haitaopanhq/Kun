@@ -2,7 +2,7 @@ import type { ReactElement } from 'react'
 import { PanelTop } from 'lucide-react'
 import { AnimatedWorkLogo } from './AnimatedWorkLogo'
 
-export function WhaleHeroStage(): ReactElement {
+export function KunHeroStage(): ReactElement {
   return (
     <div className="ds-runtime-wake-stage" aria-hidden="true">
       <div className="ds-runtime-wake-shell">

@@ -223,8 +223,8 @@ export function ScheduleTasksView({
     try {
       const [nextSettings, nextStatus] = await Promise.all([
         rendererRuntimeClient.getSettings({ forceRefresh: true }),
-        typeof window.dsGui?.getScheduleStatus === 'function'
-          ? window.dsGui.getScheduleStatus()
+        typeof window.kunGui?.getScheduleStatus === 'function'
+          ? window.kunGui.getScheduleStatus()
           : Promise.resolve(null)
       ])
       setSettings(nextSettings)
@@ -254,8 +254,8 @@ export function ScheduleTasksView({
     setSettings({ ...settings, schedule: nextSchedule })
     const saved = await rendererRuntimeClient.setSettings({ schedule: nextSchedule })
     setSettings(saved)
-    if (typeof window.dsGui?.getScheduleStatus === 'function') {
-      setStatus(await window.dsGui.getScheduleStatus())
+    if (typeof window.kunGui?.getScheduleStatus === 'function') {
+      setStatus(await window.kunGui.getScheduleStatus())
     }
   }
 
@@ -289,10 +289,10 @@ export function ScheduleTasksView({
   const pickDialogWorkspace = async (): Promise<void> => {
     if (!dialog) return
     try {
-      if (typeof window.dsGui?.pickWorkspaceDirectory !== 'function') {
+      if (typeof window.kunGui?.pickWorkspaceDirectory !== 'function') {
         throw new Error(t('workspacePickerUnavailable'))
       }
-      const picked = await window.dsGui.pickWorkspaceDirectory(resolveDialogWorkspaceRoot(dialog.draft.workspaceRoot) || undefined)
+      const picked = await window.kunGui.pickWorkspaceDirectory(resolveDialogWorkspaceRoot(dialog.draft.workspaceRoot) || undefined)
       if (picked.canceled || !picked.path) return
       onDraftChangeInDialog({ workspaceRoot: picked.path })
       setDialogError(null)
@@ -362,8 +362,8 @@ export function ScheduleTasksView({
   }
 
   const runTask = async (taskId: string): Promise<void> => {
-    if (typeof window.dsGui?.runScheduleTask !== 'function') return
-    const result = await window.dsGui.runScheduleTask(taskId)
+    if (typeof window.kunGui?.runScheduleTask !== 'function') return
+    const result = await window.kunGui.runScheduleTask(taskId)
     if (!result.ok) {
       setError(result.message)
       return

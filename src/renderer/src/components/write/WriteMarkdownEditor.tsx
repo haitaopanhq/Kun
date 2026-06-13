@@ -393,8 +393,8 @@ export function WriteMarkdownEditor({
       language: 'markdown',
       getModel: () => completionModelRef.current,
       requestCompletion: async (context, mode) => {
-        if (typeof window.dsGui?.requestWriteInlineCompletion !== 'function') return null
-        const result = await window.dsGui.requestWriteInlineCompletion(
+        if (typeof window.kunGui?.requestWriteInlineCompletion !== 'function') return null
+        const result = await window.kunGui.requestWriteInlineCompletion(
           buildInlineCompletionPayload(context, {
             model: completionModelRef.current,
             workspaceRoot: workspaceRootRef.current,
@@ -467,10 +467,10 @@ export function WriteMarkdownEditor({
               event.preventDefault()
               return true
             }
-            if (typeof window.dsGui?.saveWorkspaceClipboardImage !== 'function') return false
+            if (typeof window.kunGui?.saveWorkspaceClipboardImage !== 'function') return false
 
             event.preventDefault()
-            void window.dsGui
+            void window.kunGui
               .saveWorkspaceClipboardImage({
                 workspaceRoot: nextWorkspaceRoot,
                 currentFilePath: nextFilePath,

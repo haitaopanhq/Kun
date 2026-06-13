@@ -15,6 +15,7 @@ export type TurnAssistantBlock = Extract<ChatBlock, { kind: 'assistant' }>
 export type TurnSections = {
   processBlocks: ChatBlock[]
   assistantContentBlocks: TurnAssistantBlock[]
+  generatedFileBlocks: ToolBlock[]
   turnFileChanges: ToolBlock[]
 }
 
@@ -56,6 +57,18 @@ function mergeFileChangeBlocks(changes: ResolvedFileChangeBlock[]): ToolBlock[] 
   }
 
   return merged
+}
+
+function metaArrayLength(meta: Record<string, unknown> | undefined, key: string): number {
+  const value = meta?.[key]
+  return Array.isArray(value) ? value.length : 0
+}
+
+function hasGeneratedFiles(block: ToolBlock): boolean {
+  return (
+    block.status === 'success' &&
+    (metaArrayLength(block.meta, 'attachments') > 0 || metaArrayLength(block.meta, 'generatedFiles') > 0)
+  )
 }
 
 /**
@@ -143,5 +156,9 @@ export function deriveTurnSections({
         return [{ ...block, detail: detailText, filePath: resolvedFilePath }]
       }))
 
-  return { processBlocks, assistantContentBlocks, turnFileChanges }
+  const generatedFileBlocks: ToolBlock[] = isProcessing
+    ? []
+    : turn.blocks.filter((block): block is ToolBlock => block.kind === 'tool' && hasGeneratedFiles(block))
+
+  return { processBlocks, assistantContentBlocks, generatedFileBlocks, turnFileChanges }
 }

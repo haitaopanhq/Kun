@@ -76,7 +76,7 @@ export async function appendManagedLogLine(
 async function writeLogLine(level: LogLevel, category: string, message: string): Promise<void> {
   const stamp = new Date().toISOString()
   const line = `[${stamp}] [${level.toUpperCase()}] [${category}] ${message}\n`
-  await appendManagedLogLine('deepseek-gui', line)
+  await appendManagedLogLine('kun', line)
 }
 
 export function logError(category: string, message: string, detail?: unknown): void {

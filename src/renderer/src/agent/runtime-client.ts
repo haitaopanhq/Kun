@@ -4,7 +4,7 @@ import type {
   SseEndPayload,
   SseErrorPayload,
   SseEventPayload
-} from '@shared/ds-gui-api'
+} from '@shared/kun-gui-api'
 
 class RendererRuntimeClient {
   private cachedSettings: AppSettingsV1 | null = null
@@ -16,7 +16,7 @@ class RendererRuntimeClient {
     }
     if (this.cachedSettings) return this.cachedSettings
     if (this.settingsPromise) return this.settingsPromise
-    const task = window.dsGui.getSettings().then((settings) => {
+    const task = window.kunGui.getSettings().then((settings) => {
       this.cachedSettings = settings
       return settings
     })
@@ -27,7 +27,7 @@ class RendererRuntimeClient {
   }
 
   async setSettings(partial: AppSettingsPatch): Promise<AppSettingsV1> {
-    const settings = await window.dsGui.setSettings(partial)
+    const settings = await window.kunGui.setSettings(partial)
     this.cachedSettings = settings
     this.settingsPromise = null
     return settings
@@ -40,30 +40,30 @@ class RendererRuntimeClient {
 
   runtimeRequest(path: string, method?: string, body?: string): Promise<RuntimeRequestResult> {
     if (body === undefined) {
-      if (method === undefined) return window.dsGui.runtimeRequest(path)
-      return window.dsGui.runtimeRequest(path, method)
+      if (method === undefined) return window.kunGui.runtimeRequest(path)
+      return window.kunGui.runtimeRequest(path, method)
     }
-    return window.dsGui.runtimeRequest(path, method, body)
+    return window.kunGui.runtimeRequest(path, method, body)
   }
 
   startSse(threadId: string, sinceSeq: number, streamId?: string): Promise<{ streamId: string }> {
-    return window.dsGui.startSse(threadId, sinceSeq, streamId)
+    return window.kunGui.startSse(threadId, sinceSeq, streamId)
   }
 
   stopSse(streamId: string): Promise<boolean> {
-    return window.dsGui.stopSse(streamId)
+    return window.kunGui.stopSse(streamId)
   }
 
   onSseEvent(handler: (payload: SseEventPayload) => void): () => void {
-    return window.dsGui.onSseEvent(handler)
+    return window.kunGui.onSseEvent(handler)
   }
 
   onSseEnd(handler: (payload: SseEndPayload) => void): () => void {
-    return window.dsGui.onSseEnd(handler)
+    return window.kunGui.onSseEnd(handler)
   }
 
   onSseError(handler: (payload: SseErrorPayload) => void): () => void {
-    return window.dsGui.onSseError(handler)
+    return window.kunGui.onSseError(handler)
   }
 }
 

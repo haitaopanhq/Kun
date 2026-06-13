@@ -30,10 +30,20 @@ import {
 
 export type { AppSettingsV1 }
 
-const DEFAULT_WORKSPACE_ROOT = join(homedir(), '.deepseekgui', 'default_workspace')
-const DEFAULT_CLAW_CHANNELS_ROOT = join(homedir(), '.deepseekgui', 'claw')
+// 数据默认根目录从 ~/.deepseekgui 升级为 ~/.kun。老安装的既有目录由
+// legacy-data-migration.ts 在启动期搬迁并留兼容链接;settings 里存的旧
+// 绝对路径也在那里按迁移结果重写,这里只负责“新值”。
+const DEFAULT_WORKSPACE_ROOT = join(homedir(), '.kun', 'default_workspace')
+const DEFAULT_CLAW_CHANNELS_ROOT = join(homedir(), '.kun', 'claw')
 const DEFAULT_WRITE_WORKSPACE_ROOT_ABSOLUTE = expandHomePath(DEFAULT_WRITE_WORKSPACE_ROOT)
-const SETTINGS_FILE_NAME = 'deepseek-gui-settings.json'
+const SETTINGS_FILE_NAME = 'kun-settings.json'
+// 旧版设置文件名。userData 整目录迁移后旧文件会原样留在新目录里,
+// 首次加载从它兜底读取,load() 随后把规范化结果另存为新文件名;旧
+// 文件保留不动,用户回滚老版本时还能读到可用配置。
+const LEGACY_SETTINGS_FILE_NAME = 'deepseek-gui-settings.json'
+// 旧版 userData 目录名(更早版本还没有 app.setName 时用过小写包名)。
+// 正常情况下迁移模块已把它们 rename 走,这里是迁移失败/被跳过时的
+// 跨目录兜底。
 const COMPATIBLE_USER_DATA_DIR_NAMES = ['deepseek-gui', 'DeepSeek GUI'] as const
 const WELCOME_MARKDOWN = `# Welcome to Write
 
@@ -263,9 +273,15 @@ function compatibleSettingsPaths(currentPath: string): string[] {
   const currentUserDataDir = dirname(currentPath)
   const currentDirName = basename(currentUserDataDir)
   const parentDir = dirname(currentUserDataDir)
-  return COMPATIBLE_USER_DATA_DIR_NAMES
-    .filter((dirName) => dirName !== currentDirName)
-    .map((dirName) => join(parentDir, dirName, SETTINGS_FILE_NAME))
+  // 顺序:当前目录里的旧文件名(userData 迁移后的常见形态)优先,
+  // 然后才是旧目录里的新旧文件名。
+  const candidates = [join(currentUserDataDir, LEGACY_SETTINGS_FILE_NAME)]
+  for (const dirName of COMPATIBLE_USER_DATA_DIR_NAMES) {
+    if (dirName === currentDirName) continue
+    candidates.push(join(parentDir, dirName, SETTINGS_FILE_NAME))
+    candidates.push(join(parentDir, dirName, LEGACY_SETTINGS_FILE_NAME))
+  }
+  return candidates
 }
 
 async function readSettingsFileWithCompatibility(
@@ -331,11 +347,11 @@ export class JsonSettingsStore {
         await this.save(defaults)
         if (backupPath) {
           console.warn(
-            `[deepseek-gui] Invalid settings JSON was replaced with defaults. Backup: ${backupPath}`
+            `[kun-gui] Invalid settings JSON was replaced with defaults. Backup: ${backupPath}`
           )
         } else {
           console.warn(
-            `[deepseek-gui] Invalid settings JSON was replaced with defaults. Backup could not be written for ${sourcePath}.`
+            `[kun-gui] Invalid settings JSON was replaced with defaults. Backup could not be written for ${sourcePath}.`
           )
         }
         return defaults

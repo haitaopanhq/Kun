@@ -18,7 +18,7 @@ import type {
   ClawImSettingsV1,
   ClawModel
 } from '@shared/app-settings'
-import type { ModelProviderModelGroup } from '@shared/ds-gui-api'
+import type { ModelProviderModelGroup } from '@shared/kun-gui-api'
 
 export type QueuedUserMessage = {
   id: string

@@ -118,7 +118,7 @@ export async function collectSddDraftImages(input: {
   readImage?: WorkspaceImageReader
   measureImage?: ImageMeasurer
 }): Promise<SddDraftImageCollection> {
-  const readImage = input.readImage ?? window.dsGui.readWorkspaceImage
+  const readImage = input.readImage ?? window.kunGui.readWorkspaceImage
   const measureImage = input.measureImage ?? measureImageDataUrl
   const errors: string[] = []
   const images: SddDraftImageReference[] = []

@@ -538,7 +538,7 @@ export function createThreadActions(
         }))
         void get().refreshThreads()
       } catch (e) {
-        void window.dsGui.logError('create-thread', 'Failed to create thread', {
+        void window.kunGui.logError('create-thread', 'Failed to create thread', {
           message: e instanceof Error ? e.message : String(e)
         }).catch(() => undefined)
         set({
@@ -631,8 +631,8 @@ export function createThreadActions(
           })()
         }))
       }
-      if (channel && typeof window.dsGui?.mirrorClawChannelMessage === 'function') {
-        const userMirror = await window.dsGui.mirrorClawChannelMessage(
+      if (channel && typeof window.kunGui?.mirrorClawChannelMessage === 'function') {
+        const userMirror = await window.kunGui.mirrorClawChannelMessage(
           activeThreadId,
           trimmedText,
           'user'
@@ -668,7 +668,7 @@ export function createThreadActions(
       return true
     } catch (e) {
       clearBusyWatchdog()
-      void window.dsGui.logError('send-message', 'Failed to send message', {
+      void window.kunGui.logError('send-message', 'Failed to send message', {
         message: e instanceof Error ? e.message : String(e),
         threadId: activeThreadId
       }).catch(() => undefined)

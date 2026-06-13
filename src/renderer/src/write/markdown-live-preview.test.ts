@@ -127,7 +127,7 @@ describe('markdown live preview', () => {
 
   it('resolves root-level document images through the workspace image bridge', () => {
     vi.stubGlobal('window', {
-      dsGui: {
+      kunGui: {
         readWorkspaceImage: vi.fn()
       }
     })
@@ -146,7 +146,7 @@ describe('markdown live preview', () => {
 
   it('parses bracketed image paths that contain spaces', () => {
     vi.stubGlobal('window', {
-      dsGui: {
+      kunGui: {
         readWorkspaceImage: vi.fn()
       }
     })
@@ -172,7 +172,7 @@ describe('markdown live preview', () => {
       size: 4
     }))
     vi.stubGlobal('window', {
-      dsGui: {
+      kunGui: {
         readWorkspaceImage
       }
     })

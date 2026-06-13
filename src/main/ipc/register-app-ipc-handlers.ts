@@ -1,8 +1,8 @@
 import { app, dialog, ipcMain, shell, type BrowserWindow, type WebContents } from 'electron'
 import { watch, type FSWatcher } from 'node:fs'
 import { randomUUID } from 'node:crypto'
-import { dirname, join } from 'node:path'
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { basename, dirname, extname, join, resolve } from 'node:path'
+import { copyFile, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { z } from 'zod'
 import {
   type AppSettingsPatch,
@@ -23,7 +23,8 @@ import type {
   TurnCompleteNotificationPayload,
   UpstreamModelsResult,
   WorkspacePickResult
-} from '../../shared/ds-gui-api'
+} from '../../shared/kun-gui-api'
+import type { WorkspaceFileSaveAsResult } from '../../shared/workspace-file'
 import type { GuiUpdateDownloadResult, GuiUpdateInfo, GuiUpdateInstallResult, GuiUpdateState } from '../../shared/gui-update'
 import {
   clawMirrorPayloadSchema,
@@ -52,6 +53,7 @@ import {
   workspaceEntryDeletePayloadSchema,
   workspaceEntryRenamePayloadSchema,
   workspaceFileCreatePayloadSchema,
+  workspaceFileSaveAsPayloadSchema,
   workspaceFileTargetPayloadSchema,
   workspaceFileWatchPayloadSchema,
   workspaceFileWritePayloadSchema,
@@ -79,6 +81,7 @@ import {
   readWorkspaceImage,
   readWorkspaceFile,
   renameWorkspaceEntry,
+  resolveOpenTargetPath,
   resolveWorkspaceFile,
   saveWorkspaceClipboardImage,
   writeWorkspaceFile
@@ -135,6 +138,71 @@ function parseIpcPayload<T>(channel: string, schema: z.ZodType<T>, payload: unkn
   if (parsed.success) return parsed.data
   const issue = parsed.error.issues[0]
   throw new Error(`Invalid payload for ${channel}: ${issue?.message ?? 'Bad request.'}`)
+}
+
+function safeSaveAsFileName(input: string | undefined, fallback = 'generated-file'): string {
+  const candidate = (input ?? '').trim().replace(/\0/g, '')
+  const name = basename(candidate) || fallback
+  if (name === '.' || name === '..') return fallback
+  return name
+}
+
+function saveDialogFilters(fileName: string, mimeType: string | undefined): Electron.FileFilter[] {
+  const ext = extname(fileName).replace(/^\./, '').trim()
+  const mime = mimeType?.toLowerCase().trim() ?? ''
+  const filters: Electron.FileFilter[] = []
+  if (mime.startsWith('image/')) {
+    filters.push({ name: 'Images', extensions: ext ? [ext] : ['png', 'jpg', 'jpeg', 'webp', 'gif'] })
+  } else if (mime.startsWith('video/')) {
+    filters.push({ name: 'Videos', extensions: ext ? [ext] : ['mp4', 'webm', 'mov', 'm4v'] })
+  } else if (ext) {
+    filters.push({ name: `${ext.toUpperCase()} file`, extensions: [ext] })
+  }
+  filters.push({ name: 'All Files', extensions: ['*'] })
+  return filters
+}
+
+async function saveWorkspaceFileAs(
+  payload: unknown,
+  getMainWindow: () => BrowserWindow | null
+): Promise<WorkspaceFileSaveAsResult> {
+  const request = parseIpcPayload('file:save-as', workspaceFileSaveAsPayloadSchema, payload)
+  try {
+    const sourcePath = request.sourcePath
+      ? await resolveOpenTargetPath(request.sourcePath, request.workspaceRoot, { allowBasenameFallback: false })
+      : ''
+    const fileName = safeSaveAsFileName(request.suggestedName || (sourcePath ? basename(sourcePath) : undefined))
+    const defaultPath = request.workspaceRoot?.trim()
+      ? join(expandHomePath(request.workspaceRoot), fileName)
+      : fileName
+    const options: Electron.SaveDialogOptions = {
+      title: 'Save generated file',
+      defaultPath,
+      filters: saveDialogFilters(fileName, request.mimeType)
+    }
+    const mainWindow = getMainWindow()
+    const result = mainWindow
+      ? await dialog.showSaveDialog(mainWindow, options)
+      : await dialog.showSaveDialog(options)
+    if (result.canceled || !result.filePath) {
+      return { ok: false, canceled: true, message: 'Save cancelled.' }
+    }
+
+    const targetPath = resolve(result.filePath)
+    await mkdir(dirname(targetPath), { recursive: true })
+    if (sourcePath) {
+      if (resolve(sourcePath) !== targetPath) {
+        await copyFile(sourcePath, targetPath)
+      }
+    } else if (request.dataBase64) {
+      await writeFile(targetPath, Buffer.from(request.dataBase64, 'base64'))
+    } else {
+      return { ok: false, message: 'No file data was available to save.' }
+    }
+    return { ok: true, path: targetPath }
+  } catch (error) {
+    return { ok: false, message: error instanceof Error ? error.message : String(error) }
+  }
 }
 
 function validateMcpConfigContent(content: string): void {
@@ -548,7 +616,7 @@ export function registerAppIpcHandlers(options: RegisterAppIpcHandlersOptions): 
     }
   })
 
-  ipcMain.handle('deepseek:config:read', async () => {
+  ipcMain.handle('kun:config:read', async () => {
     const path = resolveKunConfigPath()
     try {
       const content = await readFile(path, 'utf8')
@@ -561,9 +629,9 @@ export function registerAppIpcHandlers(options: RegisterAppIpcHandlersOptions): 
     }
   })
 
-  ipcMain.handle('deepseek:config:write', async (_, content: unknown) => {
+  ipcMain.handle('kun:config:write', async (_, content: unknown) => {
     const validatedContent = parseIpcPayload(
-      'deepseek:config:write',
+      'kun:config:write',
       deepseekConfigContentSchema,
       content
     )
@@ -582,7 +650,7 @@ export function registerAppIpcHandlers(options: RegisterAppIpcHandlersOptions): 
     return { ok: true as const, path }
   })
 
-  ipcMain.handle('deepseek:config:open-dir', async () => {
+  ipcMain.handle('kun:config:open-dir', async () => {
     try {
       const path = resolveKunConfigPath()
       const dirPath = dirname(path)
@@ -642,6 +710,9 @@ export function registerAppIpcHandlers(options: RegisterAppIpcHandlersOptions): 
     readWorkspaceImage(
       parseIpcPayload('file:read-workspace-image', workspaceFileTargetPayloadSchema, payload)
     )
+  )
+  ipcMain.handle('file:save-as', async (_, payload: unknown) =>
+    saveWorkspaceFileAs(payload, getMainWindow)
   )
   ipcMain.handle('file:write-workspace', async (_, payload: unknown) =>
     writeWorkspaceFile(

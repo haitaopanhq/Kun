@@ -72,8 +72,8 @@ function createSettings(patch: Partial<AppSettingsV1['schedule']['internal']> = 
 }
 
 const launch: ClawScheduleMcpLaunchConfig = {
-  appPath: '/Applications/DeepSeek GUI.app',
-  execPath: '/Applications/DeepSeek GUI.app/Contents/MacOS/DeepSeek GUI',
+  appPath: '/Applications/Kun.app',
+  execPath: '/Applications/Kun.app/Contents/MacOS/Kun',
   isPackaged: false
 }
 
@@ -128,7 +128,7 @@ describe('claw schedule MCP config', () => {
 
   it('uses the macOS Electron helper for real app bundle paths', () => {
     expect(resolveClawScheduleMcpCommand(launch, 'darwin')).toBe(
-      '/Applications/DeepSeek GUI.app/Contents/Frameworks/DeepSeek GUI Helper.app/Contents/MacOS/DeepSeek GUI Helper'
+      '/Applications/Kun.app/Contents/Frameworks/Kun Helper.app/Contents/MacOS/Kun Helper'
     )
     expect(resolveClawScheduleMcpCommand({
       appPath: '/tmp/deepseek-gui-test-app',

@@ -45,7 +45,7 @@ describe('rendererRuntimeClient', () => {
   it('caches settings reads until invalidated', async () => {
     const getSettings = vi.fn(async () => settings('sk-1'))
     vi.stubGlobal('window', {
-      dsGui: {
+      kunGui: {
         getSettings,
         setSettings: vi.fn(),
         runtimeRequest: vi.fn(),
@@ -69,7 +69,7 @@ describe('rendererRuntimeClient', () => {
     const getSettings = vi.fn(async () => settings('sk-1'))
     const setSettings = vi.fn(async () => settings('sk-2'))
     vi.stubGlobal('window', {
-      dsGui: {
+      kunGui: {
         getSettings,
         setSettings,
         runtimeRequest: vi.fn(),

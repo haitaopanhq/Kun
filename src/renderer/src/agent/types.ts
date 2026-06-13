@@ -16,9 +16,23 @@ export type AttachmentReference = {
   id: string
   name?: string
   mimeType?: string
+  byteSize?: number
   width?: number
   height?: number
   previewUrl?: string
+}
+
+export type GeneratedFileReference = {
+  id?: string
+  name?: string
+  mimeType?: string
+  byteSize?: number
+  width?: number
+  height?: number
+  previewUrl?: string
+  path?: string
+  relativePath?: string
+  absolutePath?: string
 }
 
 export type RuntimeChildMetadata = {
@@ -41,6 +55,7 @@ export type RuntimeDisclosureMetadata = {
   displayText?: string
   attachmentIds?: string[]
   attachments?: AttachmentReference[]
+  generatedFiles?: GeneratedFileReference[]
   activeSkillIds?: string[]
   injectedMemoryIds?: string[]
   skillInjectionBytes?: number

@@ -47,7 +47,7 @@ type CodeProps = DetailedHTMLProps<HTMLAttributes<HTMLElement>, HTMLElement> & {
 }
 
 export const writeMarkdownHardenOptions = {
-  defaultOrigin: 'https://deepseek-gui.local',
+  defaultOrigin: 'https://kun.local',
   allowedLinkPrefixes: ['*'],
   allowedImagePrefixes: ['*']
 }
@@ -361,7 +361,7 @@ function WriteMarkdownPreviewContent({ content, isMarkdown, filePath }: Props): 
               onClick={(event) => {
                 if (!href) return
                 event.preventDefault()
-                void window.dsGui?.openExternal?.(href)?.catch(() => undefined)
+                void window.kunGui?.openExternal?.(href)?.catch(() => undefined)
               }}
             >
               {children}

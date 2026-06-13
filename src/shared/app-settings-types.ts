@@ -35,8 +35,10 @@ export const SCHEDULE_MODEL_IDS = CLAW_MODEL_IDS
 export const DEFAULT_SCHEDULE_REASONING_EFFORT = 'medium'
 export const SCHEDULE_REASONING_EFFORT_IDS = ['off', 'low', 'medium', 'high', 'max'] as const
 export const DEFAULT_SCHEDULE_INTERNAL_PORT = 8788
-export const DEFAULT_WRITE_WORKSPACE_ROOT = '~/.deepseekgui/write_workspace'
-export const DEFAULT_KUN_DATA_DIR = '~/.deepseekgui/kun'
+// 这些默认目录与 legacy-data-migration.ts 的 HOME_DATA_MIGRATION_MAPPINGS
+// 一一对应:老安装的 ~/.deepseekgui/* 在启动期被搬到这里。
+export const DEFAULT_WRITE_WORKSPACE_ROOT = '~/.kun/write_workspace'
+export const DEFAULT_KUN_DATA_DIR = '~/.kun/data'
 export const DEFAULT_KUN_MODEL = 'deepseek-v4-pro'
 export const DEFAULT_WRITE_INLINE_COMPLETION_BASE_URL = 'https://api.deepseek.com/beta'
 export const DEFAULT_WRITE_INLINE_COMPLETION_MODEL = 'deepseek-v4-flash'

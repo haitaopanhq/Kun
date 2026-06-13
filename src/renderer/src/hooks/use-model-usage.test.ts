@@ -11,7 +11,7 @@ function setRuntimeRequest(runtimeRequest: RuntimeRequest): void {
   Object.defineProperty(globalThis, 'window', {
     configurable: true,
     value: {
-      dsGui: {
+      kunGui: {
         runtimeRequest
       }
     }

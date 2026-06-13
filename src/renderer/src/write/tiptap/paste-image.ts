@@ -50,10 +50,10 @@ export const WritePasteImage = Extension.create<WritePasteImageOptions>({
               options.onError('Open a workspace file before pasting an image.')
               return true
             }
-            if (typeof window.dsGui?.saveWorkspaceClipboardImage !== 'function') return false
+            if (typeof window.kunGui?.saveWorkspaceClipboardImage !== 'function') return false
 
             const imageDirectory = options.getImageDirectory().trim()
-            void window.dsGui
+            void window.kunGui
               .saveWorkspaceClipboardImage({
                 workspaceRoot,
                 currentFilePath: filePath,

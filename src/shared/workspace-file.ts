@@ -23,6 +23,25 @@ export type WorkspaceFileWritePayload = {
   content: string
 }
 
+export type WorkspaceFileSaveAsPayload = {
+  suggestedName?: string
+  sourcePath?: string
+  workspaceRoot?: string
+  dataBase64?: string
+  mimeType?: string
+}
+
+export type WorkspaceFileSaveAsResult =
+  | {
+      ok: true
+      path: string
+    }
+  | {
+      ok: false
+      canceled?: boolean
+      message: string
+    }
+
 export type WorkspaceFileCreatePayload = {
   path: string
   workspaceRoot: string

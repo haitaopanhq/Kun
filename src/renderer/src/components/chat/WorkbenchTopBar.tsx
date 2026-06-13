@@ -66,9 +66,9 @@ export function WorkbenchTopBar({
 
   useEffect(() => {
     let cancelled = false
-    if (typeof window.dsGui?.listEditors !== 'function') return
+    if (typeof window.kunGui?.listEditors !== 'function') return
 
-    void window.dsGui.listEditors()
+    void window.kunGui.listEditors()
       .then((result) => {
         if (cancelled) return
         const available = result.editors.filter((editor) => editor.available)
@@ -100,13 +100,13 @@ export function WorkbenchTopBar({
   }, [editorMenuOpen])
 
   useEffect(() => {
-    if (typeof window.dsGui?.onGuiUpdateState !== 'function') return
+    if (typeof window.kunGui?.onGuiUpdateState !== 'function') return
     const applyState = (state: GuiUpdateState): void => {
       setGuiUpdateState(state)
     }
-    const unsubscribe = window.dsGui.onGuiUpdateState(applyState)
-    if (typeof window.dsGui?.getGuiUpdateState === 'function') {
-      void window.dsGui.getGuiUpdateState().then(applyState).catch(() => undefined)
+    const unsubscribe = window.kunGui.onGuiUpdateState(applyState)
+    if (typeof window.kunGui?.getGuiUpdateState === 'function') {
+      void window.kunGui.getGuiUpdateState().then(applyState).catch(() => undefined)
     }
     return unsubscribe
   }, [])
@@ -193,14 +193,14 @@ export function WorkbenchTopBar({
   const runGuiUpdateAction = async (): Promise<void> => {
     if (!guiUpdateAction || guiUpdateBusy) return
     if (guiUpdateAction.manualOnly) {
-      if (typeof window.dsGui?.openExternal === 'function') {
-        await window.dsGui.openExternal(guiUpdateAction.releaseUrl)
+      if (typeof window.kunGui?.openExternal === 'function') {
+        await window.kunGui.openExternal(guiUpdateAction.releaseUrl)
       }
       return
     }
     if (
-      typeof window.dsGui?.downloadGuiUpdate !== 'function' ||
-      typeof window.dsGui?.installGuiUpdate !== 'function'
+      typeof window.kunGui?.downloadGuiUpdate !== 'function' ||
+      typeof window.kunGui?.installGuiUpdate !== 'function'
     ) {
       return
     }
@@ -208,19 +208,19 @@ export function WorkbenchTopBar({
     setApplyingGuiUpdate(true)
     try {
       if (!guiUpdateAction.downloaded && guiUpdateState.status !== 'downloaded') {
-        const downloadResult = await window.dsGui.downloadGuiUpdate(guiUpdateAction.channel)
+        const downloadResult = await window.kunGui.downloadGuiUpdate(guiUpdateAction.channel)
         if (!downloadResult.ok) return
       }
-      const installResult = await window.dsGui.installGuiUpdate()
-      if (!installResult.ok && typeof window.dsGui?.logError === 'function') {
-        await window.dsGui.logError('gui-update', 'Failed to install GUI update from workbench top bar', {
+      const installResult = await window.kunGui.installGuiUpdate()
+      if (!installResult.ok && typeof window.kunGui?.logError === 'function') {
+        await window.kunGui.logError('gui-update', 'Failed to install GUI update from workbench top bar', {
           version: guiUpdateAction.latestVersion,
           message: installResult.message
         })
       }
     } catch (error) {
-      if (typeof window.dsGui?.logError === 'function') {
-        await window.dsGui.logError('gui-update', 'Failed to apply GUI update from workbench top bar', {
+      if (typeof window.kunGui?.logError === 'function') {
+        await window.kunGui.logError('gui-update', 'Failed to apply GUI update from workbench top bar', {
           version: guiUpdateAction.latestVersion,
           message: error instanceof Error ? error.message : String(error)
         })

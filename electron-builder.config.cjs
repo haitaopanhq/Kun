@@ -1,9 +1,17 @@
 const { existsSync, readFileSync } = require('node:fs')
 const { join } = require('node:path')
 
+// 品牌升级后构建环境变量改用 KUN_* 前缀;旧的 DEEPSEEK_GUI_* 仍然
+// 兼容读取,避免 CI / 本地发布脚本一刀切失效。
+function envWithLegacyFallback(kunName, legacyName) {
+  const value = process.env[kunName]
+  if (value !== undefined && value !== '') return value
+  return process.env[legacyName]
+}
+
 function loadLocalReleaseEnv() {
   const candidates = [
-    process.env.DEEPSEEK_GUI_RELEASE_ENV,
+    envWithLegacyFallback('KUN_RELEASE_ENV', 'DEEPSEEK_GUI_RELEASE_ENV'),
     join(__dirname, 'scripts', 'release.local.env'),
     join(__dirname, 'release.local.env')
   ].filter(Boolean)
@@ -43,32 +51,45 @@ const hasNotaryToolCredentials = Boolean(
     (process.env.APPLE_API_KEY || process.env.APPLE_API_KEY_BASE64)
 )
 
+// 更新源域名和 R2 release prefix 维持旧值不动:线上老版本轮询的就是
+// `…/deepseek-gui/channels/<channel>/latest/`,prefix 一改老客户端就再也
+// 收不到更新。品牌改名只动产物文件名,不动 feed 路径。
 const r2PublicBaseUrl = (process.env.R2_PUBLIC_BASE_URL || 'https://deepseek-gui.com/api/r2')
   .trim()
   .replace(/\/+$/, '')
 const r2ReleasePrefix = (process.env.R2_RELEASE_PREFIX || 'deepseek-gui')
   .trim()
   .replace(/^\/+|\/+$/g, '')
-const updateChannel = normalizeUpdateChannel(process.env.DEEPSEEK_GUI_UPDATE_CHANNEL || 'stable')
+const updateChannel = normalizeUpdateChannel(
+  envWithLegacyFallback('KUN_UPDATE_CHANNEL', 'DEEPSEEK_GUI_UPDATE_CHANNEL') || 'stable'
+)
 const genericUpdateUrl = `${r2PublicBaseUrl}/${r2ReleasePrefix}/channels/${updateChannel}/latest/`
-const releaseAppVersion = (process.env.DEEPSEEK_GUI_APP_VERSION || '').trim()
+const releaseAppVersion = (
+  envWithLegacyFallback('KUN_APP_VERSION', 'DEEPSEEK_GUI_APP_VERSION') || ''
+).trim()
 const artifactVersion = releaseAppVersion || '${version}'
 
 function normalizeUpdateChannel(raw) {
   const value = String(raw || '').trim()
   if (value === 'stable' || value === 'frontier') return value
-  throw new Error(`DEEPSEEK_GUI_UPDATE_CHANNEL must be "stable" or "frontier", got: ${raw}`)
+  throw new Error(`KUN_UPDATE_CHANNEL (or legacy DEEPSEEK_GUI_UPDATE_CHANNEL) must be "stable" or "frontier", got: ${raw}`)
 }
 
 if (releaseAppVersion && !/^\d+\.\d+\.\d+$/.test(releaseAppVersion)) {
   throw new Error(
-    `DEEPSEEK_GUI_APP_VERSION must be a valid x.y.z semver for electron-updater, got: ${releaseAppVersion}`
+    `KUN_APP_VERSION (or legacy DEEPSEEK_GUI_APP_VERSION) must be a valid x.y.z semver for electron-updater, got: ${releaseAppVersion}`
   )
 }
 
 module.exports = {
+  // appId 永远保持旧值,即使品牌已改名 Kun:
+  //  - macOS 端 Squirrel.Mac 校验更新包签名时锚定 bundle identifier,
+  //    换了 id 老版本会拒绝安装新版本;
+  //  - Windows 端 NSIS 以 appId 派生卸载 GUID,换了 id 升级安装不会
+  //    卸载旧版本,用户会装出两份应用;
+  //  - macOS TCC 权限、通知授权也都挂在这个 id 上。
   appId: 'com.xingyuzhong.deepseekgui',
-  productName: 'DeepSeek GUI',
+  productName: 'Kun',
   asar: true,
   asarUnpack: [
     '**/kun/dist/**/*',
@@ -80,7 +101,7 @@ module.exports = {
   ],
   npmRebuild: true,
   directories: {
-    output: process.env.DEEPSEEK_GUI_DIST_DIR || 'dist'
+    output: envWithLegacyFallback('KUN_DIST_DIR', 'DEEPSEEK_GUI_DIST_DIR') || 'dist'
   },
   files: [
     'out/**/*',
@@ -99,7 +120,7 @@ module.exports = {
     // the WeChat bridge imports @tencent-weixin/openclaw-weixin/dist at
     // runtime to send media, and that chain resolves openclaw/plugin-sdk/*.
   ],
-  artifactName: `DeepSeek-GUI-${artifactVersion}-\${os}-\${arch}.\${ext}`,
+  artifactName: `Kun-${artifactVersion}-\${os}-\${arch}.\${ext}`,
   publish: [
     {
       provider: 'generic',
@@ -142,8 +163,8 @@ module.exports = {
     // 明确创建快捷方式；always 在覆盖安装时也会重建（即使用户曾删掉桌面图标）
     createDesktopShortcut: 'always',
     createStartMenuShortcut: true,
-    shortcutName: 'DeepSeek GUI',
-    uninstallDisplayName: 'DeepSeek GUI',
+    shortcutName: 'Kun',
+    uninstallDisplayName: 'Kun',
     deleteAppDataOnUninstall: false
   },
   linux: {

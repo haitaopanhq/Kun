@@ -346,6 +346,9 @@ describe('create_plan tool mapping', () => {
       expect(block.meta?.attachments).toEqual([
         { id: 'att_abc', name: 'img-1.png', mimeType: 'image/png', width: 1024, height: 576 }
       ])
+      expect(block.meta?.generatedFiles).toEqual([
+        { relativePath: '.deepseekgui-images/img-1.png' }
+      ])
     } else {
       throw new Error('expected tool block')
     }

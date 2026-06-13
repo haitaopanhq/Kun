@@ -14,8 +14,8 @@ and agent switching are no longer shown as primary product surfaces.
 Renderer (React + Zustand)
   Code / Write / Connect phone UI
         |
-        | window.dsGui.runtimeRequest(path, method, body)
-        | window.dsGui.startSse(threadId, sinceSeq)
+        | window.kunGui.runtimeRequest(path, method, body)
+        | window.kunGui.startSse(threadId, sinceSeq)
         v
 Preload IPC bridge
         |
@@ -160,7 +160,7 @@ Saved settings should now be just:
       "apiKey": "",
       "baseUrl": "https://api.deepseek.com/beta",
       "runtimeToken": "",
-      "dataDir": "~/.deepseekgui/kun",
+      "dataDir": "~/.kun/data",
       "model": "deepseek-v4-pro",
       "approvalPolicy": "auto",
       "sandboxMode": "workspace-write",

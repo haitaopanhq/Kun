@@ -6,8 +6,10 @@ const GUI_PLAN_CLOSE = '</gui_plan>'
  * brief tag-based fallback section for legacy providers.
  */
 export const GUI_PLAN_CREATE_TOOL_NAME = 'create_plan'
-const DRAFT_PLAN_INTRO = 'DeepSeek GUI is asking you to draft a GUI-owned implementation plan.'
-const REFINE_PLAN_INTRO = 'DeepSeek GUI is asking you to revise an existing GUI-owned implementation plan.'
+const DRAFT_PLAN_INTRO = 'Kun is asking you to draft a GUI-owned implementation plan.'
+const REFINE_PLAN_INTRO = 'Kun is asking you to revise an existing GUI-owned implementation plan.'
+const LEGACY_DRAFT_PLAN_INTRO = 'DeepSeek GUI is asking you to draft a GUI-owned implementation plan.'
+const LEGACY_REFINE_PLAN_INTRO = 'DeepSeek GUI is asking you to revise an existing GUI-owned implementation plan.'
 const BUILD_PLAN_INTRO = 'Please read and execute the GUI plan file at'
 const DRAFT_PLAN_DISPLAY_PREFIX = 'Create plan:'
 const REFINE_PLAN_DISPLAY_PREFIX = 'Revise plan:'
@@ -103,6 +105,7 @@ export function getGuiPlanPromptKind(text: string): GuiPlanPromptKind | null {
   const normalized = text.trim()
   if (
     normalized.includes(DRAFT_PLAN_INTRO) ||
+    normalized.includes(LEGACY_DRAFT_PLAN_INTRO) ||
     normalized.startsWith(DRAFT_PLAN_DISPLAY_PREFIX) ||
     normalized === 'Create GUI plan'
   ) {
@@ -110,6 +113,7 @@ export function getGuiPlanPromptKind(text: string): GuiPlanPromptKind | null {
   }
   if (
     normalized.includes(REFINE_PLAN_INTRO) ||
+    normalized.includes(LEGACY_REFINE_PLAN_INTRO) ||
     normalized.startsWith(REFINE_PLAN_DISPLAY_PREFIX) ||
     normalized === 'Revise GUI plan'
   ) {
@@ -127,11 +131,11 @@ export function getGuiPlanPromptKind(text: string): GuiPlanPromptKind | null {
 
 export function formatGuiPlanPromptForDisplay(text: string): string | null {
   const normalized = text.trim()
-  if (normalized.includes(DRAFT_PLAN_INTRO)) {
+  if (normalized.includes(DRAFT_PLAN_INTRO) || normalized.includes(LEGACY_DRAFT_PLAN_INTRO)) {
     const request = readSectionAfter(normalized, 'User request:')
     return request ? `Create plan: ${request}` : 'Create GUI plan'
   }
-  if (normalized.includes(REFINE_PLAN_INTRO)) {
+  if (normalized.includes(REFINE_PLAN_INTRO) || normalized.includes(LEGACY_REFINE_PLAN_INTRO)) {
     const feedback = readSectionBetween(normalized, 'User feedback:', 'Current plan:')
     return feedback ? `Revise plan: ${feedback}` : 'Revise GUI plan'
   }

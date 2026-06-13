@@ -149,7 +149,7 @@ export function SettingsView(): ReactElement {
 
   useEffect(() => {
     let cancelled = false
-    if (typeof window.dsGui === 'undefined') {
+    if (typeof window.kunGui === 'undefined') {
       setLoadError('PRELOAD_BRIDGE')
       return
     }
@@ -173,16 +173,16 @@ export function SettingsView(): ReactElement {
   }, [formTheme, formUiFontScale])
 
   useEffect(() => {
-    if (typeof window.dsGui?.getLogPath !== 'function') return
-    void window.dsGui.getLogPath().then((p) => setLogPath(p)).catch(() => undefined)
+    if (typeof window.kunGui?.getLogPath !== 'function') return
+    void window.kunGui.getLogPath().then((p) => setLogPath(p)).catch(() => undefined)
   }, [category])
 
   const loadWriteDebugEntries = useCallback(async (): Promise<void> => {
     setWriteDebugLoading(true)
     setWriteDebugError(null)
     try {
-      const completionEntries = typeof window.dsGui?.listWriteInlineCompletionDebugEntries === 'function'
-        ? await window.dsGui.listWriteInlineCompletionDebugEntries()
+      const completionEntries = typeof window.kunGui?.listWriteInlineCompletionDebugEntries === 'function'
+        ? await window.kunGui.listWriteInlineCompletionDebugEntries()
         : []
       setWriteCompletionDebugEntries(completionEntries)
       setWriteCompletionDebugSelectedId((current) =>
@@ -322,11 +322,11 @@ export function SettingsView(): ReactElement {
   }, [skillRootId, skillRootOptions])
 
   const loadMcpConfig = async (): Promise<void> => {
-    if (typeof window.dsGui?.getDeepseekConfigFile !== 'function') return
+    if (typeof window.kunGui?.getKunConfigFile !== 'function') return
     setMcpLoading(true)
     setMcpNotice(null)
     try {
-      const config = await window.dsGui.getDeepseekConfigFile()
+      const config = await window.kunGui.getKunConfigFile()
       setMcpConfigPath(config.path)
       setMcpConfigText(config.content)
       setMcpConfigExists(config.exists)
@@ -351,20 +351,20 @@ export function SettingsView(): ReactElement {
       setSkillNotice({ tone: 'error', message: t('skillsRootUnavailable') })
       return
     }
-    if (typeof window.dsGui?.openSkillRoot !== 'function') return
+    if (typeof window.kunGui?.openSkillRoot !== 'function') return
     setSkillNotice(null)
-    const result = await window.dsGui.openSkillRoot(selectedSkillRoot.path)
+    const result = await window.kunGui.openSkillRoot(selectedSkillRoot.path)
     if (!result.ok) {
       setSkillNotice({ tone: 'error', message: result.message ?? t('applyFailed') })
     }
   }
 
   const saveMcpConfig = async (): Promise<void> => {
-    if (typeof window.dsGui?.setDeepseekConfigFile !== 'function') return
+    if (typeof window.kunGui?.setKunConfigFile !== 'function') return
     setMcpBusy(true)
     setMcpNotice(null)
     try {
-      const result = await window.dsGui.setDeepseekConfigFile(mcpConfigText)
+      const result = await window.kunGui.setKunConfigFile(mcpConfigText)
       setMcpConfigPath(result.path)
       setMcpConfigExists(true)
       setMcpNotice({
@@ -382,8 +382,8 @@ export function SettingsView(): ReactElement {
   }
 
   const openMcpConfigDir = async (): Promise<void> => {
-    if (typeof window.dsGui?.openDeepseekConfigDir !== 'function') return
-    const result = await window.dsGui.openDeepseekConfigDir()
+    if (typeof window.kunGui?.openKunConfigDir !== 'function') return
+    const result = await window.kunGui.openKunConfigDir()
     if (!result.ok) {
       setMcpNotice({ tone: 'error', message: result.message ?? t('applyFailed') })
     }
@@ -617,10 +617,10 @@ export function SettingsView(): ReactElement {
   const pickWorkspace = async (): Promise<void> => {
     try {
       setWorkspacePickerError(null)
-      if (typeof window.dsGui?.pickWorkspaceDirectory !== 'function') {
+      if (typeof window.kunGui?.pickWorkspaceDirectory !== 'function') {
         throw new Error('workspace:pick-directory unavailable')
       }
-      const picked = await window.dsGui.pickWorkspaceDirectory(form.workspaceRoot || undefined)
+      const picked = await window.kunGui.pickWorkspaceDirectory(form.workspaceRoot || undefined)
       if (!picked.canceled && picked.path) {
         update({ workspaceRoot: picked.path })
       }
@@ -637,10 +637,10 @@ export function SettingsView(): ReactElement {
   const pickWriteWorkspace = async (): Promise<void> => {
     try {
       setWriteWorkspacePickerError(null)
-      if (typeof window.dsGui?.pickWorkspaceDirectory !== 'function') {
+      if (typeof window.kunGui?.pickWorkspaceDirectory !== 'function') {
         throw new Error('workspace:pick-directory unavailable')
       }
-      const picked = await window.dsGui.pickWorkspaceDirectory(
+      const picked = await window.kunGui.pickWorkspaceDirectory(
         form.write.defaultWorkspaceRoot || DEFAULT_WRITE_WORKSPACE_ROOT
       )
       if (!picked.canceled && picked.path) {
@@ -676,10 +676,10 @@ export function SettingsView(): ReactElement {
   const pickClawWorkspace = async (): Promise<void> => {
     try {
       setClawWorkspacePickerError(null)
-      if (typeof window.dsGui?.pickWorkspaceDirectory !== 'function') {
+      if (typeof window.kunGui?.pickWorkspaceDirectory !== 'function') {
         throw new Error('workspace:pick-directory unavailable')
       }
-      const picked = await window.dsGui.pickWorkspaceDirectory(
+      const picked = await window.kunGui.pickWorkspaceDirectory(
         form.claw.im.workspaceRoot || form.workspaceRoot || undefined
       )
       if (!picked.canceled && picked.path) {
@@ -699,8 +699,8 @@ export function SettingsView(): ReactElement {
     setWriteDebugLoading(true)
     setWriteDebugError(null)
     try {
-      if (typeof window.dsGui?.clearWriteInlineCompletionDebugEntries === 'function') {
-        await window.dsGui.clearWriteInlineCompletionDebugEntries()
+      if (typeof window.kunGui?.clearWriteInlineCompletionDebugEntries === 'function') {
+        await window.kunGui.clearWriteInlineCompletionDebugEntries()
       }
       setWriteCompletionDebugEntries([])
       setWriteCompletionDebugSelectedId(null)

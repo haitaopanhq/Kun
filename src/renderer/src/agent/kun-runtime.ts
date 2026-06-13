@@ -367,7 +367,7 @@ export class KunRuntimeProvider implements AgentProvider {
   }
 
   async archiveThread(threadId: string, archived: boolean): Promise<void> {
-    const response = await window.dsGui.runtimeRequest(
+    const response = await window.kunGui.runtimeRequest(
       kunThreadPath(threadId),
       'PATCH',
       JSON.stringify({ status: archived ? 'archived' : 'idle' })

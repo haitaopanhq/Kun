@@ -130,7 +130,7 @@ describe('chat-store Claw actions helpers', () => {
         channels: [channel({ threadId: 'thr_missing', conversations: [] })]
       }
     }
-    const dsGui = {
+    const kunGui = {
       getSettings: vi.fn(async () => settings),
       setSettings: vi.fn(async (patch: { claw?: { channels?: ClawImChannelV1[] } }) => {
         settings = {
@@ -144,7 +144,7 @@ describe('chat-store Claw actions helpers', () => {
         return settings
       })
     }
-    vi.stubGlobal('window', { dsGui })
+    vi.stubGlobal('window', { kunGui })
 
     const provider = {
       createThread: vi.fn(),
@@ -208,7 +208,7 @@ describe('chat-store Claw actions helpers', () => {
     expect(state.activeClawChannelId).toBe('channel-1')
     expect(state.activeThreadId).toBeNull()
     expect(state.error).toBeNull()
-    expect(dsGui.setSettings).toHaveBeenCalledWith({
+    expect(kunGui.setSettings).toHaveBeenCalledWith({
       claw: {
         channels: [expect.objectContaining({ id: 'channel-1', threadId: '' })]
       }

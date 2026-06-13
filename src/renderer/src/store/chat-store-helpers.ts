@@ -18,9 +18,9 @@ import {
 } from '../lib/workspace-path'
 import { readBrowserStorageItem, writeBrowserStorageItem } from '../lib/browser-storage'
 
-const COMPOSER_MODEL_STORAGE_KEY = 'deepseekgui.composerModel'
-const TURN_MODEL_STORAGE_KEY = 'deepseekgui.turnModelLabel'
-const CODE_WORKSPACE_ROOTS_STORAGE_KEY = 'deepseekgui.codeWorkspaceRoots.v1'
+const COMPOSER_MODEL_STORAGE_KEY = 'kun.composerModel'
+const TURN_MODEL_STORAGE_KEY = 'kun.turnModelLabel'
+const CODE_WORKSPACE_ROOTS_STORAGE_KEY = 'kun.codeWorkspaceRoots.v1'
 export const MAX_CODE_WORKSPACE_ROOTS = 30
 export const MAX_TURN_MODEL_LABELS = 500
 

@@ -151,8 +151,8 @@ function usageNumber(value: unknown): number {
 }
 
 async function loadTokenEconomySavingsSummary(): Promise<TokenEconomySavingsSummary | null> {
-  if (typeof window === 'undefined' || typeof window.dsGui?.runtimeRequest !== 'function') return null
-  const response = await window.dsGui.runtimeRequest('/v1/usage?group_by=thread', 'GET')
+  if (typeof window === 'undefined' || typeof window.kunGui?.runtimeRequest !== 'function') return null
+  const response = await window.kunGui.runtimeRequest('/v1/usage?group_by=thread', 'GET')
   if (!response.ok || !response.body.trim()) return null
   const parsed = parseUsageResponse<{ totals?: Record<string, unknown> }>(response.body, 'token economy usage')
   const totals = parsed.totals ?? {}

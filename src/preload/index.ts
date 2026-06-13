@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
-import type { DsGuiApi } from '../shared/ds-gui-api'
+import type { KunGuiApi } from '../shared/kun-gui-api'
 
 const api = {
   platform: process.platform,
@@ -29,12 +29,12 @@ const api = {
     ipcRenderer.invoke('skill:save-file', { rootPath, skillName, content }),
   openSkillRoot: (rootPath) =>
     ipcRenderer.invoke('skill:open-root', rootPath),
-  getDeepseekConfigFile: () =>
-    ipcRenderer.invoke('deepseek:config:read'),
-  setDeepseekConfigFile: (content) =>
-    ipcRenderer.invoke('deepseek:config:write', content),
-  openDeepseekConfigDir: () =>
-    ipcRenderer.invoke('deepseek:config:open-dir'),
+  getKunConfigFile: () =>
+    ipcRenderer.invoke('kun:config:read'),
+  setKunConfigFile: (content) =>
+    ipcRenderer.invoke('kun:config:write', content),
+  openKunConfigDir: () =>
+    ipcRenderer.invoke('kun:config:open-dir'),
   getGitBranches: (workspaceRoot) =>
     ipcRenderer.invoke('git:branches', workspaceRoot),
   switchGitBranch: (workspaceRoot, branch) =>
@@ -52,6 +52,8 @@ const api = {
     ipcRenderer.invoke('file:read-workspace', options),
   readWorkspaceImage: (options) =>
     ipcRenderer.invoke('file:read-workspace-image', options),
+  saveWorkspaceFileAs: (payload) =>
+    ipcRenderer.invoke('file:save-as', payload),
   writeWorkspaceFile: (payload) =>
     ipcRenderer.invoke('file:write-workspace', payload),
   createWorkspaceFile: (payload) =>
@@ -167,6 +169,6 @@ const api = {
   getLogPath: () => ipcRenderer.invoke('log:get-path'),
   openLogDir: () => ipcRenderer.invoke('log:open-dir'),
   getPathForFile: (file: File) => webUtils.getPathForFile(file)
-} satisfies DsGuiApi
+} satisfies KunGuiApi
 
-contextBridge.exposeInMainWorld('dsGui', api)
+contextBridge.exposeInMainWorld('kunGui', api)

@@ -87,8 +87,8 @@ export function InitialSetupDialog(): ReactElement {
   }
 
   const handleOpenOfficialApiPage = () => {
-    if (typeof window.dsGui?.openExternal !== 'function') return
-    void window.dsGui.openExternal(DEEPSEEK_USAGE_URL).catch(() => undefined)
+    if (typeof window.kunGui?.openExternal !== 'function') return
+    void window.kunGui.openExternal(DEEPSEEK_USAGE_URL).catch(() => undefined)
   }
 
   const handleSave = async () => {

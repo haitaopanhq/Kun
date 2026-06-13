@@ -89,7 +89,7 @@ export function WorkspaceFilePreviewPanel({
     setLoading(true)
     setResult(null)
 
-    void window.dsGui
+    void window.kunGui
       .readWorkspaceFile({
         ...target,
         workspaceRoot: target.workspaceRoot ?? workspaceRoot
@@ -187,7 +187,7 @@ export function WorkspaceFilePreviewPanel({
       target?.workspaceRoot ?? workspaceRoot
     ).then((next) => {
       if (!next.ok) {
-        void window.dsGui?.logError?.('editor-open', 'Failed to open previewed file', {
+        void window.kunGui?.logError?.('editor-open', 'Failed to open previewed file', {
           message: next.message,
           target
         })?.catch(() => undefined)

@@ -142,4 +142,26 @@ describe('WorkspaceModeTabs', () => {
     expect(html).toContain('role="tablist"')
     expect(html).toContain('Code / Write')
   })
+
+  it('can render an iKun visual mode switch under the tabs', () => {
+    const onCodeOpen = vi.fn()
+    const onWriteOpen = vi.fn()
+    const onToggleIkunMode = vi.fn()
+
+    const html = renderToStaticMarkup(
+      createElement(WorkspaceModeTabs, {
+        activeView: 'chat',
+        ikunModeEnabled: true,
+        onCodeOpen,
+        onToggleIkunMode,
+        onWriteOpen
+      })
+    )
+
+    expect(html).toContain('role="switch"')
+    expect(html).toContain('aria-checked="true"')
+    expect(html).toContain('iKun')
+    expect(html).toContain('On')
+    expect(html.match(/role="tab"/g)?.length).toBe(2)
+  })
 })

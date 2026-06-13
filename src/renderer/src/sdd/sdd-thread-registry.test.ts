@@ -10,7 +10,7 @@ import {
 } from './sdd-thread-registry'
 import type { SddDraft } from './sdd-draft-store'
 
-const SDD_THREAD_REGISTRY_KEY = 'deepseekgui.sdd.threadRegistry.v1'
+const SDD_THREAD_REGISTRY_KEY = 'kun.sdd.threadRegistry.v1'
 
 function createMemoryStorage(): BrowserStorageLike {
   const items = new Map<string, string>()

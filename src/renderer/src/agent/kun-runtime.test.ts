@@ -36,9 +36,9 @@ function settings(): AppSettingsV1 {
   }
 }
 
-function installDsGui(overrides: Partial<Window['dsGui']>): void {
+function installDsGui(overrides: Partial<Window['kunGui']>): void {
   vi.stubGlobal('window', {
-    dsGui: {
+    kunGui: {
       getSettings: vi.fn(async () => settings()),
       runtimeRequest: vi.fn(async () => ({ ok: true, status: 200, body: '{}' })),
       startSse: vi.fn(async (_threadId: string, _sinceSeq: number, streamId?: string) => ({

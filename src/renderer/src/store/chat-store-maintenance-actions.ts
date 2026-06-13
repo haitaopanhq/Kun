@@ -664,7 +664,7 @@ export function createMaintenanceActions(
       }))
     } catch (e) {
       const msg = formatRuntimeError(e)
-      void window.dsGui.logError('approval', 'Failed to submit approval decision', {
+      void window.kunGui.logError('approval', 'Failed to submit approval decision', {
         message: msg,
         blockId
       }).catch(() => undefined)
@@ -751,7 +751,7 @@ export function createMaintenanceActions(
       }))
     } catch (e) {
       const msg = formatRuntimeError(e)
-      void window.dsGui.logError('user-input', 'Failed to resolve user input', {
+      void window.kunGui.logError('user-input', 'Failed to resolve user input', {
         message: msg,
         blockId
       }).catch(() => undefined)
@@ -784,7 +784,7 @@ export function createMaintenanceActions(
       await p.interruptTurn(activeThreadId, currentTurnId, { discard: options?.discard === true })
     } catch (e) {
       const msg = formatRuntimeError(e)
-      void window.dsGui.logError('interrupt', 'Failed to interrupt turn', { message: msg }).catch(() => undefined)
+      void window.kunGui.logError('interrupt', 'Failed to interrupt turn', { message: msg }).catch(() => undefined)
       set({
         error: msg,
         ...(shouldOpenSettingsForError(e)

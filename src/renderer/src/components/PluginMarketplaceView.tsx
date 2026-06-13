@@ -21,7 +21,7 @@ import {
 import { readBrowserStorageItem, writeBrowserStorageItem } from '../lib/browser-storage'
 import { normalizeWorkspaceRoot } from '../lib/workspace-path'
 import { getProvider } from '../agent/registry'
-import type { SkillListItem } from '@shared/ds-gui-api'
+import type { SkillListItem } from '@shared/kun-gui-api'
 import type {
   CoreRuntimeInfoJson,
   CoreRuntimeToolDiagnosticsJson
@@ -64,7 +64,7 @@ type SkillRootOption = {
   available: boolean
 }
 
-const INSTALLED_STORAGE_KEY = 'deepseekgui.installedPlugins'
+const INSTALLED_STORAGE_KEY = 'kun.installedPlugins'
 const GUI_SCHEDULE_MCP_SERVER_ID = 'gui_schedule'
 
 function loadInstalledPlugins(): string[] {
@@ -521,8 +521,8 @@ export function PluginMarketplaceView(): ReactElement {
   }, [skillRootId, skillRootOptions])
 
   const readMcpConfig = useCallback(async (): Promise<string> => {
-    if (typeof window.dsGui?.getDeepseekConfigFile !== 'function') return mcpConfigText
-    const file = await window.dsGui.getDeepseekConfigFile()
+    if (typeof window.kunGui?.getKunConfigFile !== 'function') return mcpConfigText
+    const file = await window.kunGui.getKunConfigFile()
     setMcpConfigText(file.content)
     setMcpLoaded(true)
     return file.content
@@ -536,7 +536,7 @@ export function PluginMarketplaceView(): ReactElement {
   }, [activeKind, mcpLoaded, readMcpConfig])
 
   const refreshMcpRuntimeOverlay = useCallback(async (): Promise<void> => {
-    if (typeof window.dsGui?.runtimeRequest !== 'function') {
+    if (typeof window.kunGui?.runtimeRequest !== 'function') {
       setRuntimeInfo(null)
       setToolDiagnostics(null)
       setRuntimeOverlayError(t('pluginMcpRuntimeUnavailable'))
@@ -575,7 +575,7 @@ export function PluginMarketplaceView(): ReactElement {
   }, [activeKind, refreshMcpRuntimeOverlay])
 
   const refreshSkillList = useCallback(async (): Promise<void> => {
-    if (typeof window.dsGui?.listSkills !== 'function') {
+    if (typeof window.kunGui?.listSkills !== 'function') {
       setDiscoveredSkills([])
       setSkillListError(t('pluginSkillScanUnavailable'))
       return
@@ -583,7 +583,7 @@ export function PluginMarketplaceView(): ReactElement {
     setSkillListLoading(true)
     setSkillListError('')
     try {
-      const result = await window.dsGui.listSkills(workspaceRoot || undefined)
+      const result = await window.kunGui.listSkills(workspaceRoot || undefined)
       if (!result.ok) {
         setDiscoveredSkills([])
         setSkillListError(result.message)
@@ -704,7 +704,7 @@ export function PluginMarketplaceView(): ReactElement {
       setNotice({ tone: 'info', message: t('pluginAlreadyAdded') })
       return
     }
-    const result = await window.dsGui.setDeepseekConfigFile(merged.text)
+    const result = await window.kunGui.setKunConfigFile(merged.text)
     setMcpConfigText(merged.text)
     setMcpLoaded(true)
     markInstalled(storageKey('mcp', id))
@@ -734,7 +734,7 @@ export function PluginMarketplaceView(): ReactElement {
         description,
         item.skillInstructions ?? description
       )
-      const result = await window.dsGui.saveSkillFile(selectedSkillRoot.path, item.id, content)
+      const result = await window.kunGui.saveSkillFile(selectedSkillRoot.path, item.id, content)
       if (!result.ok) {
         setNotice({ tone: 'error', message: result.message })
         return
@@ -776,7 +776,7 @@ export function PluginMarketplaceView(): ReactElement {
         }
         const body = customSkillBody.trim() || t('pluginCustomSkillFallbackBody')
         const content = buildSkillContent(id, customName.trim() || id, description, body)
-        const result = await window.dsGui.saveSkillFile(selectedSkillRoot.path, id, content)
+        const result = await window.kunGui.saveSkillFile(selectedSkillRoot.path, id, content)
         if (!result.ok) {
           setNotice({ tone: 'error', message: result.message })
           return
@@ -802,7 +802,7 @@ export function PluginMarketplaceView(): ReactElement {
   const openManageTarget = async (): Promise<void> => {
     try {
       if (activeKind === 'mcp') {
-        const result = await window.dsGui.openDeepseekConfigDir()
+        const result = await window.kunGui.openKunConfigDir()
         if (!result.ok) setNotice({ tone: 'error', message: result.message ?? t('pluginActionFailed') })
         return
       }
@@ -810,7 +810,7 @@ export function PluginMarketplaceView(): ReactElement {
         setNotice({ tone: 'error', message: t('pluginSkillRootMissing') })
         return
       }
-      const result = await window.dsGui.openSkillRoot(selectedSkillRoot.path)
+      const result = await window.kunGui.openSkillRoot(selectedSkillRoot.path)
       if (!result.ok) setNotice({ tone: 'error', message: result.message ?? t('pluginActionFailed') })
     } catch (e) {
       setNotice({ tone: 'error', message: e instanceof Error ? e.message : String(e) })
@@ -1121,7 +1121,7 @@ function marketplaceSourceTone(tone: MarketplaceItem['statusTone']): string {
 
 function runtimeOverlayErrorMessage(error: unknown, fallback: string): string {
   const message = error instanceof Error ? error.message : String(error)
-  return /runtimeRequest|dsGui|Cannot read properties/i.test(message) ? fallback : message
+  return /runtimeRequest|kunGui|Cannot read properties/i.test(message) ? fallback : message
 }
 
 function PluginSection({

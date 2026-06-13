@@ -14,7 +14,7 @@ import {
   resolveKeyboardShortcutBindings,
   type KeyboardShortcutCommandId
 } from '@shared/keyboard-shortcuts'
-import type { DesktopCommand, SkillListItem } from '@shared/ds-gui-api'
+import type { DesktopCommand, SkillListItem } from '@shared/kun-gui-api'
 import type { ClipboardImageReadResult } from '@shared/workspace-file'
 import type { AttachmentReference, ChatBlock } from '../agent/types'
 import type { CoreRuntimeInfoJson, CoreRuntimeSkillJson } from '../agent/kun-contract'
@@ -73,6 +73,7 @@ import { isChatAttachmentUploadEnabled } from '../lib/attachment-upload-availabi
 import { normalizeWorkspaceRoot } from '../lib/workspace-path'
 import { useKeyboardShortcutSettings } from '../lib/keyboard-shortcut-settings'
 import { collectComposerChangeSummary } from '../lib/composer-change-summary'
+import { readIkunModePreference, writeIkunModePreference } from '../lib/ikun-mode'
 import {
   buildComposerFileContextPrompt,
   mergeComposerFileReferences,
@@ -355,6 +356,7 @@ export function Workbench(): ReactElement {
   const [attachmentUploadBusy, setAttachmentUploadBusy] = useState(false)
   const [attachmentUploadError, setAttachmentUploadError] = useState<string | null>(null)
   const [connectPhoneSidebarOpen, setConnectPhoneSidebarOpen] = useState(false)
+  const [ikunModeEnabled, setIkunModeEnabled] = useState(readIkunModePreference)
   const [runtimeLogPath, setRuntimeLogPath] = useState('')
   const writeAssistantOpen = useWriteWorkspaceStore((s) => s.assistantOpen)
   const setWriteAssistantOpen = useWriteWorkspaceStore((s) => s.setAssistantOpen)
@@ -491,8 +493,8 @@ export function Workbench(): ReactElement {
 
   useEffect(() => {
     const runDesktopShortcut = (command: DesktopCommand): void => {
-      if (typeof window.dsGui?.runDesktopCommand !== 'function') return
-      void window.dsGui.runDesktopCommand(command)
+      if (typeof window.kunGui?.runDesktopCommand !== 'function') return
+      void window.kunGui.runDesktopCommand(command)
     }
 
     const onKeyDown = (event: KeyboardEvent): void => {
@@ -546,9 +548,9 @@ export function Workbench(): ReactElement {
     latestDevPreviewUrl !== null
 
   useEffect(() => {
-    if (typeof window === 'undefined' || typeof window.dsGui?.getLogPath !== 'function') return
+    if (typeof window === 'undefined' || typeof window.kunGui?.getLogPath !== 'function') return
     let cancelled = false
-    void window.dsGui
+    void window.kunGui
       .getLogPath()
       .then((path) => {
         if (!cancelled) setRuntimeLogPath(path)
@@ -558,6 +560,11 @@ export function Workbench(): ReactElement {
       cancelled = true
     }
   }, [])
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return
+    document.documentElement.setAttribute('data-ikun-mode', ikunModeEnabled ? 'on' : 'off')
+  }, [ikunModeEnabled])
 
   useEffect(() => {
     const previousThreadId = prevThreadId.current
@@ -627,14 +634,14 @@ export function Workbench(): ReactElement {
   )
 
   const mirrorClawCommand = async (userText: string, replyText: string): Promise<void> => {
-    if (!activeThreadId || typeof window.dsGui?.mirrorClawChannelMessage !== 'function') return
-    const userResult = await window.dsGui.mirrorClawChannelMessage(
+    if (!activeThreadId || typeof window.kunGui?.mirrorClawChannelMessage !== 'function') return
+    const userResult = await window.kunGui.mirrorClawChannelMessage(
       activeThreadId,
       userText,
       'user'
     )
     if (!userResult.ok) return
-    await window.dsGui.mirrorClawChannelMessage(
+    await window.kunGui.mirrorClawChannelMessage(
       activeThreadId,
       replyText,
       'assistant'
@@ -703,8 +710,8 @@ export function Workbench(): ReactElement {
     const runtimeReady = runtimeConnection === 'ready'
     if (!runtimeReady) setRuntimeInfo(null)
     const provider = getProvider()
-    const localSkillsTask = typeof window !== 'undefined' && typeof window.dsGui?.listSkills === 'function'
-      ? window.dsGui.listSkills(activeSkillWorkspace || undefined)
+    const localSkillsTask = typeof window !== 'undefined' && typeof window.kunGui?.listSkills === 'function'
+      ? window.kunGui.listSkills(activeSkillWorkspace || undefined)
       : Promise.resolve({ ok: true as const, skills: [], validationErrors: [] })
     void Promise.allSettled([
       runtimeReady && provider.getRuntimeInfo ? provider.getRuntimeInfo() : Promise.resolve(null),
@@ -826,11 +833,11 @@ export function Workbench(): ReactElement {
 
   const handlePasteClipboardImage = async (options: { silentNoImage?: boolean } = {}): Promise<void> => {
     if (!attachmentUploadEnabled) return
-    if (typeof window.dsGui?.readClipboardImage !== 'function') {
+    if (typeof window.kunGui?.readClipboardImage !== 'function') {
       setAttachmentUploadError(t('composerAttachmentUnavailable'))
       return
     }
-    const image = await window.dsGui.readClipboardImage()
+    const image = await window.kunGui.readClipboardImage()
     if (!image.ok) {
       if (options.silentNoImage) return
       setAttachmentUploadError(image.message)
@@ -988,7 +995,7 @@ export function Workbench(): ReactElement {
     }
     const restored = await restoreRememberedSddDraft({
       workspaceRoot: targetWorkspace,
-      readWorkspaceFile: window.dsGui.readWorkspaceFile
+      readWorkspaceFile: window.kunGui.readWorkspaceFile
     })
     if (restored.kind === 'restored') {
       await openSddRequirementDraft(restored.draft, restored.content, {
@@ -1010,7 +1017,7 @@ export function Workbench(): ReactElement {
       `## ${t('sddTemplateAcceptance')}`,
       ''
     ].join('\n')
-    const result = await window.dsGui.createWorkspaceFile({
+    const result = await window.kunGui.createWorkspaceFile({
       workspaceRoot: targetWorkspace,
       path: draft.relativePath,
       content: initialContent
@@ -1036,7 +1043,7 @@ export function Workbench(): ReactElement {
     restoredSddDraftWorkspaceRef.current = targetWorkspace
     void restoreRememberedSddDraft({
       workspaceRoot: targetWorkspace,
-      readWorkspaceFile: window.dsGui.readWorkspaceFile
+      readWorkspaceFile: window.kunGui.readWorkspaceFile
     }).then((restored) => {
       if (cancelled || restored.kind !== 'restored') return
       if (useSddDraftStore.getState().activeDraft) return
@@ -1222,7 +1229,7 @@ export function Workbench(): ReactElement {
     // requirement drift against the plan that is about to be generated.
     const tracePath = sddDraftTraceRelativePath(draft.relativePath)
     if (tracePath) {
-      await window.dsGui
+      await window.kunGui
         .writeWorkspaceFile({
           workspaceRoot: draft.workspaceRoot,
           path: tracePath,
@@ -1244,7 +1251,7 @@ export function Workbench(): ReactElement {
     let remainingChars = COMPOSER_FILE_CONTEXT_MAX_TOTAL_CHARS
     for (const reference of references) {
       if (remainingChars <= 0) break
-      const result = await window.dsGui.readWorkspaceFile({
+      const result = await window.kunGui.readWorkspaceFile({
         workspaceRoot: workspace,
         path: reference.relativePath || reference.path
       })
@@ -1404,8 +1411,8 @@ export function Workbench(): ReactElement {
       }
       setInput('')
       void (async () => {
-        const taskResult = typeof window.dsGui?.createClawTaskFromText === 'function'
-          ? await window.dsGui.createClawTaskFromText(v, {
+        const taskResult = typeof window.kunGui?.createClawTaskFromText === 'function'
+          ? await window.kunGui.createClawTaskFromText(v, {
               channelId: activeClawChannelId,
               modelHint: activeClawChannel?.model,
               mode
@@ -1486,6 +1493,14 @@ export function Workbench(): ReactElement {
     openSchedule()
   }
 
+  const toggleIkunMode = (): void => {
+    setIkunModeEnabled((enabled) => {
+      const next = !enabled
+      writeIkunModePreference(next)
+      return next
+    })
+  }
+
   const toggleConnectPhone = (): void => {
     if (activeSddDraft) dismissActiveSddDraft({ closeAssistant: true })
     openClaw()
@@ -1527,8 +1542,8 @@ export function Workbench(): ReactElement {
       stageInsetClass={stageInsetClass}
       t={t}
       onOpenLogDir={
-        typeof window !== 'undefined' && typeof window.dsGui?.openLogDir === 'function'
-          ? () => window.dsGui.openLogDir()
+        typeof window !== 'undefined' && typeof window.kunGui?.openLogDir === 'function'
+          ? () => window.kunGui.openLogDir()
           : undefined
       }
       onOpenSettings={() => openSettings('agents')}
@@ -1669,9 +1684,11 @@ export function Workbench(): ReactElement {
               <WriteSidebar
                 activeView={sidebarView}
                 connectPhoneSidebarOpen={connectPhoneSidebarOpen}
+                ikunModeEnabled={ikunModeEnabled}
                 onCodeOpen={openCodeMode}
                 onWriteOpen={openWriteMode}
                 onOpenSettings={(section) => openSettings(section)}
+                onToggleIkunMode={toggleIkunMode}
                 onToggleConnectPhone={toggleConnectPhone}
                 onToggleSidebar={toggleLeftSidebar}
               />
@@ -1681,6 +1698,7 @@ export function Workbench(): ReactElement {
               activeThreadId={activeThreadId}
               activeView={sidebarView}
               connectPhoneSidebarOpen={connectPhoneSidebarOpen}
+              ikunModeEnabled={ikunModeEnabled}
               pluginsActive={route === 'plugins'}
               runtimeReady={runtimeConnection === 'ready'}
               threadSearch={threadSearch}
@@ -1700,6 +1718,7 @@ export function Workbench(): ReactElement {
               onToggleConnectPhone={toggleConnectPhone}
               onCodeOpen={openCodeMode}
               onWriteOpen={openWriteMode}
+              onToggleIkunMode={toggleIkunMode}
               onScheduleOpen={openScheduleView}
               onToggleSidebar={toggleLeftSidebar}
             />

@@ -33,7 +33,7 @@ import {
   SCHEDULE_REASONING_EFFORT_IDS,
   WRITE_INLINE_COMPLETION_MODEL_IDS
 } from '../../shared/app-settings'
-import { DESKTOP_COMMANDS } from '../../shared/ds-gui-api'
+import { DESKTOP_COMMANDS } from '../../shared/kun-gui-api'
 import { GUI_UPDATE_CHANNELS } from '../../shared/gui-update'
 import { KEYBOARD_SHORTCUT_COMMANDS } from '../../shared/keyboard-shortcuts'
 import { WRITE_EXPORT_FORMATS } from '../../shared/write-export'
@@ -52,6 +52,7 @@ const MAX_SKILL_FILE_BYTES = 1_000_000
 const MAX_CONFIG_FILE_BYTES = 2_000_000
 const MAX_DEVICE_CODE_LENGTH = 8_192
 const MAX_EDITOR_COMPLETION_TEXT = 200_000
+const MAX_SAVE_FILE_BASE64_BYTES = 64 * 1024 * 1024
 
 const SAFE_OPEN_EXTERNAL_PROTOCOLS = new Set(['http:', 'https:', 'mailto:'])
 
@@ -584,6 +585,19 @@ export const workspaceFileWritePayloadSchema = z
     content: z.string().max(MAX_BODY_BYTES)
   })
   .strict()
+
+export const workspaceFileSaveAsPayloadSchema = z
+  .object({
+    suggestedName: optionalTrimmedString(255),
+    sourcePath: optionalTrimmedString(MAX_PATH_LENGTH),
+    workspaceRoot: optionalTrimmedString(MAX_PATH_LENGTH),
+    dataBase64: z.string().max(MAX_SAVE_FILE_BASE64_BYTES).optional(),
+    mimeType: optionalTrimmedString(255)
+  })
+  .strict()
+  .refine((payload) => Boolean(payload.sourcePath || payload.dataBase64), {
+    message: 'Either sourcePath or dataBase64 is required.'
+  })
 
 export const workspaceFileCreatePayloadSchema = z
   .object({

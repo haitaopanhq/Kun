@@ -94,7 +94,7 @@ export function GeneralSettingsSection({ ctx }: { ctx: Record<string, any> }): R
     splitSettingsList,
     listSettingsText
   } = ctx
-  const platform = typeof window !== 'undefined' ? window.dsGui?.platform ?? '' : ''
+  const platform = typeof window !== 'undefined' ? window.kunGui?.platform ?? '' : ''
   const openAtLoginSupported = platform === 'win32' || platform === 'darwin'
   const startMinimizedSupported = platform === 'win32'
   const desktopBehavior = form.appBehavior
@@ -376,12 +376,12 @@ export function GeneralSettingsSection({ ctx }: { ctx: Record<string, any> }): R
                       <button
                         type="button"
                         className="inline-flex items-center gap-1.5 rounded-xl border border-ds-border bg-ds-card px-3 py-1.5 text-[13px] font-medium text-ds-ink shadow-sm transition hover:bg-ds-hover disabled:opacity-50"
-                        disabled={typeof window.dsGui?.openLogDir !== 'function'}
+                        disabled={typeof window.kunGui?.openLogDir !== 'function'}
                         onClick={async () => {
-                          if (typeof window.dsGui?.openLogDir !== 'function') return
+                          if (typeof window.kunGui?.openLogDir !== 'function') return
                           setLogDirOpenError(null)
                           try {
-                            const result = await window.dsGui.openLogDir()
+                            const result = await window.kunGui.openLogDir()
                             if (!result.ok) setLogDirOpenError(result.message ?? 'Unknown error')
                           } catch (e) {
                             setLogDirOpenError(e instanceof Error ? e.message : String(e))

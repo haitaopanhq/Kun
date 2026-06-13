@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
@@ -115,6 +115,33 @@ describe('registerAppIpcHandlers', () => {
     expect(applySettingsPatch).toHaveBeenCalledWith(payload)
   })
 
+  it('saves generated files to a user-selected path', async () => {
+    const { dialog } = await import('electron')
+    const { registerAppIpcHandlers } = await import('./register-app-ipc-handlers')
+    const temp = mkdtempSync(join(tmpdir(), 'kun-save-as-'))
+    const source = join(temp, 'source.png')
+    const target = join(temp, 'downloaded.png')
+    writeFileSync(source, 'generated-image')
+    ;(dialog as unknown as { showSaveDialog: ReturnType<typeof vi.fn> }).showSaveDialog = vi.fn(async () => ({
+      canceled: false,
+      filePath: target
+    }))
+
+    try {
+      registerAppIpcHandlers(registerOptions())
+
+      const handler = handlers.get('file:save-as')
+      await expect(handler?.({}, {
+        sourcePath: source,
+        suggestedName: 'source.png',
+        mimeType: 'image/png'
+      })).resolves.toEqual({ ok: true, path: target })
+      expect(readFileSync(target, 'utf8')).toBe('generated-image')
+    } finally {
+      rmSync(temp, { recursive: true, force: true })
+    }
+  })
+
   it('accepts the full settings snapshot emitted by SettingsView auto-apply', async () => {
     const { registerAppIpcHandlers } = await import('./register-app-ipc-handlers')
     const applySettingsPatch = vi.fn(async () => settings())
@@ -180,7 +207,7 @@ describe('registerAppIpcHandlers', () => {
         onKunMcpConfigWritten
       }))
 
-      await expect(handlers.get('deepseek:config:write')?.({}, content)).resolves.toEqual({
+      await expect(handlers.get('kun:config:write')?.({}, content)).resolves.toEqual({
         ok: true,
         path: configPath
       })
@@ -203,10 +230,10 @@ describe('registerAppIpcHandlers', () => {
         onKunMcpConfigWritten
       }))
 
-      await expect(handlers.get('deepseek:config:write')?.({}, '{')).rejects.toThrow(
+      await expect(handlers.get('kun:config:write')?.({}, '{')).rejects.toThrow(
         /MCP config must be JSON/
       )
-      await expect(handlers.get('deepseek:config:write')?.({}, '[]')).rejects.toThrow(
+      await expect(handlers.get('kun:config:write')?.({}, '[]')).rejects.toThrow(
         /MCP config must be a JSON object/
       )
       expect(existsSync(configPath)).toBe(false)

@@ -307,7 +307,7 @@ describe('chat-store-maintenance-actions goal actions', () => {
 
   it('keeps the turn settled when the backend interrupt fails', async () => {
     ;(globalThis as { window?: unknown }).window = {
-      dsGui: {
+      kunGui: {
         logError: vi.fn(async () => undefined)
       }
     }

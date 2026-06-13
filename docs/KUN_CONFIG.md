@@ -10,9 +10,9 @@ Kun 有两层配置。
 
    这是桌面应用自己的设置文件，保存设置页里的 Agent 运行时选项。
 
-   - macOS: `~/Library/Application Support/DeepSeek GUI/deepseek-gui-settings.json`
-   - Windows: `%APPDATA%/DeepSeek GUI/deepseek-gui-settings.json`
-   - Linux: `~/.config/DeepSeek GUI/deepseek-gui-settings.json`
+   - macOS: `~/Library/Application Support/Kun/kun-settings.json`
+   - Windows: `%APPDATA%/Kun/kun-settings.json`
+   - Linux: `~/.config/Kun/kun-settings.json`
 
    Agent 运行时设置在 `agents.kun` 下，例如端口、data dir、默认模型、审批策略、sandbox、token economy 等。多数用户通过设置页修改这些字段。
 
@@ -21,7 +21,7 @@ Kun 有两层配置。
    这是 Kun 本地运行时读取的高级配置文件。默认路径是：
 
    ```text
-   ~/.deepseekgui/kun/config.json
+   ~/.kun/data/config.json
    ```
 
    如果 `agents.kun.dataDir` 改成了别的目录，实际路径就是：
@@ -36,7 +36,7 @@ Kun 有两层配置。
 
 GUI 启动 Kun 时会按下面的顺序合并配置。
 
-1. GUI 读取 `deepseek-gui-settings.json`，得到 `agents.kun` 和通用 provider 配置。
+1. GUI 读取 `kun-settings.json`（旧版 `deepseek-gui-settings.json` 会自动迁移），得到 `agents.kun` 和通用 provider 配置。
 2. GUI 在启动 Kun 前同步 `<dataDir>/config.json`，写入 UI 管理的 token economy、默认压缩摘要参数、默认模型 profiles、runtime tuning、MCP search 和附件能力。
 3. Kun serve 读取 `<dataDir>/config.json` 或 `--config` 指定的文件。
 4. CLI 参数和环境变量会覆盖 `serve` 里的基础启动字段，例如 `--model`、`--port`、`KUN_MODEL`、`KUN_PORT`。
@@ -49,7 +49,7 @@ GUI 启动 Kun 时会按下面的顺序合并配置。
   "serve": {
     "host": "127.0.0.1",
     "port": 8899,
-    "dataDir": "~/.deepseekgui/kun",
+    "dataDir": "~/.kun/data",
     "runtimeToken": "",
     "apiKey": "",
     "baseUrl": "https://api.deepseek.com/beta",
@@ -200,7 +200,7 @@ Kun 内置 DeepSeek V4 默认模型画像：
       "binaryPath": "",
       "port": 8899,
       "autoStart": true,
-      "dataDir": "~/.deepseekgui/kun",
+      "dataDir": "~/.kun/data",
       "model": "deepseek-v4-pro",
       "approvalPolicy": "auto",
       "sandboxMode": "workspace-write",

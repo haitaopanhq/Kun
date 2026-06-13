@@ -28,7 +28,7 @@ import type {
   ClawImSettingsV1,
   ClawModel
 } from '@shared/app-settings'
-import type { ClawImInstallPollResult, ClawImInstallQrResult } from '@shared/ds-gui-api'
+import type { ClawImInstallPollResult, ClawImInstallQrResult } from '@shared/kun-gui-api'
 import { confirmDialog } from '../../lib/confirm-dialog'
 import {
   type ClawInstallQrState,
@@ -274,7 +274,7 @@ export function ConnectPhoneView({
     }
     if (
       typeof window === 'undefined' ||
-      typeof window.dsGui?.startClawImInstallQr !== 'function'
+      typeof window.kunGui?.startClawImInstallQr !== 'function'
     ) {
       setInstallQr({
         ...INITIAL_QR_STATE,
@@ -293,7 +293,7 @@ export function ConnectPhoneView({
     const request = connectPhoneInstallRequestOptions(target)
     let result: ClawImInstallQrResult
     try {
-      result = await window.dsGui.startClawImInstallQr(request.provider, request.options)
+      result = await window.kunGui.startClawImInstallQr(request.provider, request.options)
     } catch (error) {
       if (installAttempt !== installAttemptRef.current) return
       setInstallQr({
@@ -345,11 +345,11 @@ export function ConnectPhoneView({
       try {
         if (
           typeof window === 'undefined' ||
-          typeof window.dsGui?.pollClawImInstall !== 'function'
+          typeof window.kunGui?.pollClawImInstall !== 'function'
         ) {
           throw new Error(t('clawAddImOfficialQrUnavailable'))
         }
-        const poll = await window.dsGui.pollClawImInstall(request.provider, result.deviceCode)
+        const poll = await window.kunGui.pollClawImInstall(request.provider, result.deviceCode)
         if (installAttempt !== installAttemptRef.current) return
         if (poll.done) {
           clearInstallTimers()
@@ -723,7 +723,7 @@ export function ConnectPhoneSidebarPanel({
     }
     if (
       typeof window === 'undefined' ||
-      typeof window.dsGui?.startClawImInstallQr !== 'function'
+      typeof window.kunGui?.startClawImInstallQr !== 'function'
     ) {
       setInstallQr({
         ...INITIAL_QR_STATE,
@@ -742,7 +742,7 @@ export function ConnectPhoneSidebarPanel({
     const request = connectPhoneInstallRequestOptions(target)
     let result: ClawImInstallQrResult
     try {
-      result = await window.dsGui.startClawImInstallQr(request.provider, request.options)
+      result = await window.kunGui.startClawImInstallQr(request.provider, request.options)
     } catch (error) {
       if (installAttempt !== installAttemptRef.current) return
       setInstallQr({
@@ -794,11 +794,11 @@ export function ConnectPhoneSidebarPanel({
       try {
         if (
           typeof window === 'undefined' ||
-          typeof window.dsGui?.pollClawImInstall !== 'function'
+          typeof window.kunGui?.pollClawImInstall !== 'function'
         ) {
           throw new Error(t('clawAddImOfficialQrUnavailable'))
         }
-        const poll = await window.dsGui.pollClawImInstall(request.provider, result.deviceCode)
+        const poll = await window.kunGui.pollClawImInstall(request.provider, result.deviceCode)
         if (installAttempt !== installAttemptRef.current) return
         if (poll.done) {
           clearInstallTimers()

@@ -16,7 +16,7 @@ import {
   type ModelUsageState,
   useModelUsageState
 } from '../../hooks/use-model-usage'
-import { WhaleHeroStage } from './WhaleHeroStage'
+import { KunHeroStage } from './KunHeroStage'
 
 type CalendarCell = DailyUsageBucket | null
 type CalendarWeek = {
@@ -708,7 +708,7 @@ function UsageHeroSection({
   return (
     <div className="flex w-full min-w-0 flex-col items-center text-center">
       <div>
-        <WhaleHeroStage />
+        <KunHeroStage />
       </div>
       {showText ? (
         <>
@@ -814,8 +814,8 @@ export function InitialSessionUsageHeatmapView({
 
   useEffect(() => {
     let cancelled = false
-    if (typeof window === 'undefined' || typeof window.dsGui?.getSettings !== 'function') return
-    void window.dsGui.getSettings()
+    if (typeof window === 'undefined' || typeof window.kunGui?.getSettings !== 'function') return
+    void window.kunGui.getSettings()
       .then((settings) => {
         if (!cancelled) setModelLabel(settings.agents.kun.model.trim())
       })

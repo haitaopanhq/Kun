@@ -93,7 +93,7 @@ The result: Kun is built for real project work with long tasks, long sessions, a
 - **Feature-flagged agent extensions**: Kun can enable MCP, web fetch/search, Skills, standalone CLI use, image attachments, cross-session memory, and delegated subagents by config; Settings shows the runtime-reported capability and diagnostics state.
 - **Connect phone**: run a background agent alongside normal chat, with current support for Feishu / Lark / WeChat, IM webhook / relay flows, and scheduled tasks.
 - **Scheduled tasks**: create one-time, daily, interval, or manual tasks with their own workspace, model, and reasoning effort so Kun can run while the computer is awake.
-- **Write mode**: manage `~/.deepseekgui/write_workspace` and custom writing spaces, browse Markdown files, use live Markdown editing, preview relative images, get DeepSeek FIM short completion / inspiration completion with optional cross-document BM25 + keyword retrieval, export the current document as `HTML / PDF / DOC / DOCX`, and invoke the writing assistant directly from selected text.
+- **Write mode**: manage `~/.kun/write_workspace` and custom writing spaces, browse Markdown files, use live Markdown editing, preview relative images, get DeepSeek FIM short completion / inspiration completion with optional cross-document BM25 + keyword retrieval, export the current document as `HTML / PDF / DOC / DOCX`, and invoke the writing assistant directly from selected text.
 - **High token ROI**: Kun keeps prompt prefixes stable, tracks DeepSeek-native cache hit/miss fields, compacts context and tool output, and uses MCP search to discover tools progressively so tokens stay focused on requirements, code, decisions, and results.
 - **Friendly first launch**: choose language, add your DeepSeek API key, and optionally set a compatible Base URL.
 - **Local-first**: preferences, sessions, logs, and runtime config stay on your machine; model calls use your own DeepSeek API key.
@@ -158,7 +158,7 @@ Simplified architecture:
 ```text
 Renderer (React)
   → KunRuntimeProvider
-  → preload: dsGui.runtimeRequest / startSse
+  → preload: kunGui.runtimeRequest / startSse
   → main: LocalHttpRuntimeAdapter
   → kun serve (HTTP + SSE)
   → cache-first AgentLoop
@@ -214,7 +214,7 @@ A dedicated Markdown writing workbench that keeps writing files, save state, and
   <img src="src/asset/img/writemode.png" alt="Kun Write mode" width="860">
 </p>
 
-- Manage `~/.deepseekgui/write_workspace` plus custom writing spaces from the left file tree.
+- Manage `~/.kun/write_workspace` plus custom writing spaces from the left file tree.
 - Switch between **Live / Source / Split / Preview**; Live keeps Markdown source on the active line and renders the rest.
 - Export the current Markdown document from the toolbar as `HTML / PDF / DOC / DOCX`, with best-effort preservation for headings, lists, code blocks, tables, and local images.
 - DeepSeek FIM short and inspiration completion, plus selection-based inline agent actions and a right-side writing assistant for summaries, outlines, and polish.
@@ -328,11 +328,11 @@ Write mode extends Kun from a code/chat workbench into a long-form writing works
 
 ## Uninstall
 
-> Published installers still use `DeepSeek GUI` as the application name; the steps and paths below follow the actual installed name.
+> New installers use `Kun` as the application name; old `DeepSeek GUI` data is migrated on first launch and compatibility links are kept for rollback.
 
 ### Windows
 
-- Open Settings -> Apps -> Installed apps, find `DeepSeek GUI`, and uninstall it.
+- Open Settings -> Apps -> Installed apps, find `Kun`, and uninstall it.
 - Or uninstall from Control Panel -> Programs and Features.
 - Or run the uninstaller from the installation directory.
 
@@ -340,12 +340,12 @@ The Windows installer creates Start Menu and desktop shortcuts by default. It do
 
 ### macOS
 
-- Move `DeepSeek GUI.app` from Applications to Trash.
+- Move `Kun.app` from Applications to Trash.
 - If macOS blocks the app on first open, right-click it in Finder and choose Open.
 - For local unsigned builds, you can remove the quarantine attribute first:
 
 ```bash
-npm run mac:unquarantine -- '/Applications/DeepSeek GUI.app'
+npm run mac:unquarantine -- '/Applications/Kun.app'
 ```
 
 ### Linux
@@ -359,11 +359,11 @@ By default, uninstalling removes the app but keeps local settings, sessions, and
 
 | Platform | App data path |
 | --- | --- |
-| macOS | `~/Library/Application Support/DeepSeek GUI` |
-| Windows | `%APPDATA%\DeepSeek GUI` |
-| Linux | `~/.config/DeepSeek GUI` |
+| macOS | `~/Library/Application Support/Kun` |
+| Windows | `%APPDATA%\Kun` |
+| Linux | `~/.config/Kun` |
 
-Kun data lives under `~/.deepseekgui/kun` or the configured Kun data dir. Check it before deleting, because it may contain sessions, MCP, or Skill settings you still need.
+Kun data lives under `~/.kun/data` or the configured Kun data dir. Check it before deleting, because it may contain sessions, MCP, or Skill settings you still need. The legacy `~/.deepseekgui/kun` path may remain as a compatibility link for rollback.
 
 ---
 

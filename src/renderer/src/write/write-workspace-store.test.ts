@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useWriteWorkspaceStore } from './write-workspace-store'
 
-function installDsGui(overrides: Partial<Window['dsGui']>): void {
+function installDsGui(overrides: Partial<Window['kunGui']>): void {
   vi.stubGlobal('window', {
-    dsGui: overrides
+    kunGui: overrides
   })
 }
 

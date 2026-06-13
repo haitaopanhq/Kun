@@ -1,6 +1,7 @@
 import type {
   ChatBlock,
   CompactionEventPayload,
+  GeneratedFileReference,
   NormalizedThread,
   ReviewBlock,
   ReviewEventPayload,
@@ -273,8 +274,10 @@ type ToolAttachmentReference = {
   id: string
   name?: string
   mimeType?: string
+  byteSize?: number
   width?: number
   height?: number
+  previewUrl?: string
 }
 
 function extractToolAttachments(item: CoreTurnItemJson): ToolAttachmentReference[] | undefined {
@@ -291,12 +294,77 @@ function extractToolAttachments(item: CoreTurnItemJson): ToolAttachmentReference
         id,
         ...(typeof raw.name === 'string' && raw.name.trim() ? { name: raw.name.trim() } : {}),
         ...(typeof raw.mimeType === 'string' && raw.mimeType.trim() ? { mimeType: raw.mimeType.trim() } : {}),
+        ...(typeof raw.byteSize === 'number' && Number.isFinite(raw.byteSize) ? { byteSize: raw.byteSize } : {}),
         ...(typeof raw.width === 'number' && Number.isFinite(raw.width) ? { width: raw.width } : {}),
-        ...(typeof raw.height === 'number' && Number.isFinite(raw.height) ? { height: raw.height } : {})
+        ...(typeof raw.height === 'number' && Number.isFinite(raw.height) ? { height: raw.height } : {}),
+        ...(typeof raw.previewUrl === 'string' && raw.previewUrl.trim() ? { previewUrl: raw.previewUrl.trim() } : {}),
+        ...(typeof raw.dataUrl === 'string' && raw.dataUrl.trim() ? { previewUrl: raw.dataUrl.trim() } : {})
       }
     })
     .filter((entry): entry is ToolAttachmentReference => entry !== null)
   return attachments.length > 0 ? attachments : undefined
+}
+
+function readGeneratedFileString(raw: Record<string, unknown>, ...keys: string[]): string | undefined {
+  for (const key of keys) {
+    const value = raw[key]
+    if (typeof value === 'string' && value.trim()) return value.trim()
+  }
+  return undefined
+}
+
+function normalizeGeneratedFileReference(entry: unknown): GeneratedFileReference | null {
+  if (!entry || typeof entry !== 'object') return null
+  const raw = entry as Record<string, unknown>
+  const id = readGeneratedFileString(raw, 'id', 'attachmentId')
+  const name = readGeneratedFileString(raw, 'name', 'fileName', 'filename')
+  const mimeType = readGeneratedFileString(raw, 'mimeType', 'type', 'mediaType')
+  const previewUrl = readGeneratedFileString(raw, 'previewUrl', 'dataUrl', 'url')
+  const path = readGeneratedFileString(raw, 'path', 'file')
+  const relativePath = readGeneratedFileString(raw, 'relativePath', 'relative_path')
+  const absolutePath = readGeneratedFileString(raw, 'absolutePath', 'absolute_path')
+  const byteSize = raw.byteSize
+  const width = raw.width
+  const height = raw.height
+  const normalized: GeneratedFileReference = {
+    ...(id ? { id } : {}),
+    ...(name ? { name } : {}),
+    ...(mimeType ? { mimeType } : {}),
+    ...(typeof byteSize === 'number' && Number.isFinite(byteSize) ? { byteSize } : {}),
+    ...(typeof width === 'number' && Number.isFinite(width) ? { width } : {}),
+    ...(typeof height === 'number' && Number.isFinite(height) ? { height } : {}),
+    ...(previewUrl ? { previewUrl } : {}),
+    ...(path ? { path } : {}),
+    ...(relativePath ? { relativePath } : {}),
+    ...(absolutePath ? { absolutePath } : {})
+  }
+  return Object.keys(normalized).length > 0 ? normalized : null
+}
+
+function extractToolGeneratedFiles(item: CoreTurnItemJson): GeneratedFileReference[] | undefined {
+  if (item.kind !== 'tool_result') return undefined
+  const payload = payloadFor(item)
+  const candidates = [
+    ...(Array.isArray(payload.files) ? payload.files : []),
+    ...(Array.isArray(payload.generatedFiles) ? payload.generatedFiles : [])
+  ]
+  const generatedFiles: GeneratedFileReference[] = []
+  const seen = new Set<string>()
+  for (const candidate of candidates) {
+    const normalized = normalizeGeneratedFileReference(candidate)
+    if (!normalized) continue
+    const key =
+      normalized.id ??
+      normalized.absolutePath ??
+      normalized.relativePath ??
+      normalized.path ??
+      normalized.previewUrl ??
+      normalized.name
+    if (key && seen.has(key)) continue
+    if (key) seen.add(key)
+    generatedFiles.push(normalized)
+  }
+  return generatedFiles.length > 0 ? generatedFiles : undefined
 }
 
 function applyCommandResultMeta(meta: Record<string, unknown>, item: CoreTurnItemJson): void {
@@ -410,6 +478,8 @@ function toolBlockFromItem(item: CoreTurnItemJson, child?: CoreChildRuntimeMetad
   if (sources) meta.sources = sources
   const attachments = extractToolAttachments(item)
   if (attachments) meta.attachments = attachments
+  const generatedFiles = extractToolGeneratedFiles(item)
+  if (generatedFiles) meta.generatedFiles = generatedFiles
   const presentation = inferToolPresentation(item)
   if (presentation.command) meta.command = presentation.command
   if (presentation.toolKind === 'command_execution') applyCommandResultMeta(meta, item)
