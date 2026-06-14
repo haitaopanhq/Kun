@@ -518,8 +518,6 @@
   "pluginCustomSkillBody": "写给智能体的 Skill 指令",
   "pluginCustomSkillFallbackBody": "在这里补充这个 Skill 的具体工作方式、限制和输出要求。",
   "pluginAddCustom": "添加自定义",
-  "pluginMcpFilesystemTitle": "Filesystem",
-  "pluginMcpFilesystemDesc": "允许智能体读取和写入指定工作区文件。",
   "pluginMcpGuiScheduleTitle": "Kun 定时任务",
   "pluginMcpGuiScheduleDesc": "内置 MCP 工具，用于查看、创建、更新和删除定时任务。",
   "pluginMcpPlaywrightTitle": "Playwright",

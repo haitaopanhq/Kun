@@ -5,10 +5,15 @@ import {
   mcpConfigHasServer,
   mcpMarketplaceItemsFromConfigAndDiagnostics,
   mergeMcpJsonConfig,
+  recommendedMarketplaceItemIds,
   skillMarketplaceItemsFromDiscoveredSkills
 } from './PluginMarketplaceView'
 
 describe('PluginMarketplaceView MCP config helpers', () => {
+  it('does not recommend the filesystem MCP server because Kun has built-in file tools', () => {
+    expect(recommendedMarketplaceItemIds()).not.toContain('filesystem')
+  })
+
   it('merges recommended MCP servers into JSON config without dropping existing fields', () => {
     const existing = JSON.stringify({
       timeouts: { read_timeout: 120 },

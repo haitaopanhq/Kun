@@ -367,23 +367,6 @@ const RECOMMENDED_ITEMS: MarketplaceItem[] = [
     systemManaged: true
   },
   {
-    id: 'filesystem',
-    kind: 'mcp',
-    titleKey: 'pluginMcpFilesystemTitle',
-    descriptionKey: 'pluginMcpFilesystemDesc',
-    group: 'recommended',
-    mcpConfig: (workspaceRoot) =>
-      buildMcpConfig(
-        'filesystem',
-        'npx',
-        ['-y', '@modelcontextprotocol/server-filesystem', workspaceRoot || '/path/to/project'],
-        {
-          trustScope: 'workspace',
-          trustedWorkspaceRoots: [workspaceRoot || '/path/to/project']
-        }
-      )
-  },
-  {
     id: 'playwright',
     kind: 'mcp',
     titleKey: 'pluginMcpPlaywrightTitle',
@@ -459,6 +442,10 @@ const RECOMMENDED_ITEMS: MarketplaceItem[] = [
       'Use this skill when preparing release notes. Group user-facing changes by outcome, call out migrations or risks, and keep wording concise and scannable.'
   }
 ]
+
+export function recommendedMarketplaceItemIds(): string[] {
+  return RECOMMENDED_ITEMS.map((item) => item.id)
+}
 
 export function PluginMarketplaceView(): ReactElement {
   const { t } = useTranslation('common')

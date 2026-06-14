@@ -518,8 +518,6 @@
   "pluginCustomSkillBody": "Skill instructions for the agent",
   "pluginCustomSkillFallbackBody": "Describe this Skill's workflow, constraints, and expected output here.",
   "pluginAddCustom": "Add custom",
-  "pluginMcpFilesystemTitle": "Filesystem",
-  "pluginMcpFilesystemDesc": "Let the agent read and write files in the selected workspace.",
   "pluginMcpGuiScheduleTitle": "Kun Schedule",
   "pluginMcpGuiScheduleDesc": "Built-in MCP tools for listing, creating, updating, and deleting scheduled tasks.",
   "pluginMcpPlaywrightTitle": "Playwright",
