@@ -19,6 +19,30 @@ import {
   readThreadForkRegistry,
   saveThreadForkRegistry
 } from '../lib/thread-fork-registry'
+import {
+  forgetThreadWorktree,
+  readThreadWorktreeRegistry,
+  saveThreadWorktreeRegistry
+} from '../lib/thread-worktree-registry'
+
+/**
+ * Release the worktree pool slot owned by a thread when the task completes
+ * or is interrupted. Fire-and-forget — a failure must not block the UI.
+ */
+function releaseThreadWorktreeIfNeeded(threadId: string | null): void {
+  if (!threadId || typeof window === 'undefined') return
+  if (typeof window.kunGui?.releaseWorktree !== 'function') return
+  const record = readThreadWorktreeRegistry().worktrees[threadId]
+  if (!record) return
+  void window.kunGui
+    .releaseWorktree({
+      projectPath: record.projectPath,
+      poolIndex: record.poolIndex
+    })
+    .catch(() => undefined)
+  saveThreadWorktreeRegistry(forgetThreadWorktree(threadId))
+}
+
 import { workspaceLabelFromPath } from '../lib/workspace-label'
 import { isInternalTemporaryWorkspace, normalizeWorkspaceRoot } from '../lib/workspace-path'
 import { buildClawRuntimePrompt, getActiveAgentApiKey } from '@shared/app-settings'
@@ -135,6 +159,7 @@ function applyTodosSnapshot(
 function settleInterruptedTurn(set: ChatStoreSet, get: ChatStoreGet): void {
   resetBusyRecoveryAttempts()
   clearBusyWatchdog()
+  const threadId = get().activeThreadId
   set((s) => {
     const out = flushLiveBlocks(s, {
       ...finalizeTurnTiming(s),
@@ -146,6 +171,11 @@ function settleInterruptedTurn(set: ChatStoreSet, get: ChatStoreGet): void {
     const blocks = settlePendingRuntimeWorkAfterInterrupt(out.blocks ?? s.blocks)
     return { ...out, blocks }
   })
+  // Release worktree slot when user manually stops the agent (unless queued
+  // follow-ups will restart the turn in the same thread).
+  if (threadId && get().queuedMessages.length === 0) {
+    releaseThreadWorktreeIfNeeded(threadId)
+  }
 }
 
 export function createMaintenanceActions(
@@ -255,9 +285,31 @@ export function createMaintenanceActions(
       return
     }
     try {
-      await p.compactThread(activeThreadId, reason)
+      const result = await p.compactThread(activeThreadId, reason)
       await get().refreshThreads()
       await get().selectThread(activeThreadId)
+      // Manual compaction may use a model request for the summary, but the
+      // chat context gauge is still based on the main turn's measured prompt.
+      // Drop the last turn's total by the folded amount so the UI reflects the
+      // compacted model-visible history immediately. The next real turn
+      // replaces this with a precise provider count.
+      const replacedTokens = result && typeof result.replacedTokens === 'number' ? result.replacedTokens : 0
+      if (replacedTokens > 0) {
+        set((s) => {
+          const prev = s.lastTurnUsage
+          if (!prev || prev.threadId !== activeThreadId) return {}
+          const inputTokens = Math.max(0, prev.snapshot.inputTokens - replacedTokens)
+          return {
+            usageRefreshKey: s.usageRefreshKey + 1,
+            lastTurnUsage: { threadId: prev.threadId, snapshot: { ...prev.snapshot, inputTokens } }
+          }
+        })
+      } else {
+        // Nothing was folded (e.g. a near-empty thread). The compaction emits no
+        // timeline row in that case, so surface a transient notice instead of
+        // leaving the command silently doing nothing.
+        set({ error: i18n.t('common:compactionNothingToCompact') })
+      }
     } catch (e) {
       set({
         error: formatRuntimeError(e),
@@ -552,10 +604,24 @@ export function createMaintenanceActions(
     const { activeThreadId } = get()
     const p = getProvider()
     const deletingActive = activeThreadId === targetId
+    // Release the worktree pool slot if this thread owned one. Best-effort:
+    // a failure to release must not block thread deletion.
+    const wtRecord = readThreadWorktreeRegistry().worktrees[targetId]
+    if (wtRecord) {
+      try {
+        await window.kunGui.releaseWorktree({
+          projectPath: wtRecord.projectPath,
+          poolIndex: wtRecord.poolIndex
+        })
+      } catch {
+        /* best-effort; the slot can be reclaimed later via Settings */
+      }
+    }
     try {
       await p.deleteThread(targetId)
       saveWriteThreadRegistry(forgetWriteThread(targetId))
       saveThreadForkRegistry(forgetThreadFork(targetId))
+      if (wtRecord) saveThreadWorktreeRegistry(forgetThreadWorktree(targetId))
       if (deletingActive) {
         sseAbortRef.current?.abort()
         sseAbortRef.current = null

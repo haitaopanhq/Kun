@@ -88,6 +88,7 @@ export function makeHarness(
       maxStringBytes?: number
     }
     hooks?: readonly ResolvedHook[]
+    goalResume?: NonNullable<ConstructorParameters<typeof AgentLoop>[0]['goalResume']>
   } = {}
 ): Harness {
   const bus = new InMemoryEventBus()
@@ -145,7 +146,8 @@ export function makeHarness(
     ...(options.contextCompaction ? { contextCompaction: options.contextCompaction } : {}),
     ...(options.toolStorm ? { toolStorm: options.toolStorm } : {}),
     ...(options.toolArgumentRepair ? { toolArgumentRepair: options.toolArgumentRepair } : {}),
-    ...(options.hooks ? { hooks: options.hooks } : {})
+    ...(options.hooks ? { hooks: options.hooks } : {}),
+    ...(options.goalResume ? { goalResume: options.goalResume } : {})
   })
 
   return {

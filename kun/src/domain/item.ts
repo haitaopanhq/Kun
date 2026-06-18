@@ -10,8 +10,17 @@ export function makeUserItem(input: {
   text: string
   displayText?: string
   attachmentIds?: string[]
+  fileReferences?: Array<{ path: string; relativePath: string; name: string; kind?: 'file' | 'directory' }>
 }): TurnItem {
   const attachmentIds = input.attachmentIds?.filter((id) => id.trim().length > 0)
+  const fileReferences = input.fileReferences
+    ?.map((reference) => ({
+      path: reference.path.trim(),
+      relativePath: reference.relativePath.trim(),
+      name: reference.name.trim(),
+      ...(reference.kind === 'directory' ? { kind: 'directory' as const } : { kind: 'file' as const })
+    }))
+    .filter((reference) => reference.path && reference.relativePath && reference.name)
   const displayText = input.displayText?.trim()
   return {
     id: input.id,
@@ -24,7 +33,8 @@ export function makeUserItem(input: {
     kind: 'user_message',
     text: input.text,
     ...(displayText && displayText !== input.text ? { displayText } : {}),
-    ...(attachmentIds?.length ? { attachmentIds } : {})
+    ...(attachmentIds?.length ? { attachmentIds } : {}),
+    ...(fileReferences?.length ? { fileReferences } : {})
   }
 }
 
@@ -183,6 +193,7 @@ export function makeCompactionItem(input: {
   summary: string
   replacedTokens: number
   pinnedConstraints: string[]
+  auto?: boolean
   sourceDigest?: string
   digestMarker?: string
   sourceItemIds?: string[]
@@ -199,6 +210,7 @@ export function makeCompactionItem(input: {
     summary: input.summary,
     replacedTokens: input.replacedTokens,
     pinnedConstraints: input.pinnedConstraints,
+    ...(input.auto === undefined ? {} : { auto: input.auto }),
     ...(input.sourceDigest ? { sourceDigest: input.sourceDigest } : {}),
     ...(input.digestMarker ? { digestMarker: input.digestMarker } : {}),
     ...(input.sourceItemIds ? { sourceItemIds: [...input.sourceItemIds] } : {})

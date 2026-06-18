@@ -19,6 +19,11 @@ import {
   readThreadForkRegistry,
   saveThreadForkRegistry
 } from '../lib/thread-fork-registry'
+import {
+  markThreadWorktree,
+  saveThreadWorktreeRegistry
+} from '../lib/thread-worktree-registry'
+import { parseWorktreeHasChangesError } from '@shared/worktree'
 import { workspaceLabelFromPath } from '../lib/workspace-label'
 import { isInternalTemporaryWorkspace, normalizeWorkspaceRoot } from '../lib/workspace-path'
 import {
@@ -182,7 +187,7 @@ function subscribeThreadEventsWithRecovery(
 
 export function createThreadActions(
   { set, get, sseAbortRef }: StoreActionContext
-): Pick<ChatState, 'createThread' | 'recoverActiveTurn' | 'selectThread' | 'drainQueuedMessages' | 'removeQueuedMessage' | 'sendMessage' | 'reviewActiveThread'> {
+): Pick<ChatState, 'createThread' | 'recoverActiveTurn' | 'selectThread' | 'subscribeThreadEventsLive' | 'drainQueuedMessages' | 'removeQueuedMessage' | 'sendMessage' | 'reviewActiveThread'> {
   return {
   createThread: async (options = {}) => {
     if (get().runtimeConnection !== 'ready') {
@@ -195,7 +200,7 @@ export function createThreadActions(
       const activeThread = get().activeThreadId
         ? get().threads.find((thread) => thread.id === get().activeThreadId)
         : null
-      const workspaceRoot =
+      let workspaceRoot =
         normalizeWorkspaceRoot(options.workspaceRoot) ||
         (activeThread && !isInternalTemporaryWorkspace(activeThread.workspace)
           ? normalizeWorkspaceRoot(activeThread.workspace)
@@ -207,7 +212,9 @@ export function createThreadActions(
       }
       const codeWorkspaceRoots = rememberCodeWorkspaceRoots(get().codeWorkspaceRoots, [workspaceRoot])
       set({ codeWorkspaceRoots })
-      const reusableThreadId = options.forceNew
+      // Worktree pool mode always needs a fresh thread bound to a fresh pool
+      // slot, so never reuse an existing main-workspace thread in that case.
+      const reusableThreadId = options.forceNew || options.useWorktreePool
         ? null
         : await findReusableEmptyThreadId(
             get(),
@@ -223,6 +230,52 @@ export function createThreadActions(
         }
         return
       }
+      // Worktree pool mode: acquire an isolated worktree as the thread workspace
+      // so multiple agents can work on the same repo in parallel. Falls back to
+      // the normal workspace on any failure (pool full, not a git repo, etc.).
+      let acquiredWorktree: { projectPath: string; poolIndex: number; path: string; branch: string } | null = null
+      if (options.useWorktreePool) {
+        try {
+          const poolIndex = await window.kunGui.findAvailableWorktreePoolIndex({
+            projectPath: workspaceRoot
+          })
+          if (poolIndex === null) {
+            set({ error: i18n.t('common:worktreePoolFull') })
+          } else {
+            // Pool worktrees are ephemeral scratch spaces; if a leftover worktree
+            // has uncommitted changes from a previous run, force-reset it. This
+            // mirrors the Settings panel's force-acquire behavior.
+            const acquireWithForce = async (force: boolean) =>
+              window.kunGui.acquireWorktree({
+                projectPath: workspaceRoot,
+                poolIndex,
+                taskId: `pending-${Date.now()}`,
+                force
+              })
+            let wt: { path: string; branch: string }
+            try {
+              wt = await acquireWithForce(false)
+            } catch (acquireErr) {
+              const acquireMsg = acquireErr instanceof Error ? acquireErr.message : String(acquireErr)
+              if (parseWorktreeHasChangesError(acquireMsg)) {
+                wt = await acquireWithForce(true)
+              } else {
+                throw acquireErr
+              }
+            }
+            acquiredWorktree = {
+              projectPath: workspaceRoot,
+              poolIndex,
+              path: wt.path,
+              branch: wt.branch
+            }
+            workspaceRoot = wt.path
+          }
+        } catch {
+          set({ error: i18n.t('common:worktreeAcquireFailed') })
+          // proceed with the original workspaceRoot
+        }
+      }
       const t = await p.createThread({
         workspace: workspaceRoot,
         title: getDefaultThreadTitle(),
@@ -237,6 +290,17 @@ export function createThreadActions(
         threads: s.threads.some((thread) => thread.id === t.id) ? s.threads : [t, ...s.threads]
       }))
       await get().selectThread(t.id)
+      if (acquiredWorktree) {
+        saveThreadWorktreeRegistry(
+          markThreadWorktree(t.id, {
+            projectPath: acquiredWorktree.projectPath,
+            poolIndex: acquiredWorktree.poolIndex,
+            worktreePath: acquiredWorktree.path,
+            branch: acquiredWorktree.branch,
+            createdAt: new Date().toISOString()
+          })
+        )
+      }
       await get().refreshThreads()
     } catch (e) {
       set({
@@ -400,6 +464,107 @@ export function createThreadActions(
     }
   },
 
+  subscribeThreadEventsLive: async (threadId) => {
+    if (get().runtimeConnection !== 'ready') return
+    const targetThreadId = threadId.trim()
+    if (!targetThreadId) return
+    // Live-only entry point for claw channel events (e.g. Feishu / Lark
+    // bot replies). Three things happen in parallel:
+    //   1. Synchronously switch the chat view to this thread + mark busy
+    //      so the user sees the bot's deltas arrive as they stream in,
+    //      not blocked by the HTTP fetch.
+    //   2. Open the SSE stream immediately with `sinceSeq: 0` to capture
+    //      any deltas that arrive during the fetch window.
+    //   3. Pre-fetch the thread's persisted history so the user is not
+    //      left staring at an empty view if the thread had prior turns.
+    // On fetch success we merge the persisted blocks into the store
+    // while preserving the liveAssistant/liveReasoning buffers (which
+    // may have accumulated SSE deltas during the fetch) and bumping
+    // `lastSeq` to `Math.max(fetched, current)` so no deltas are lost.
+    sseAbortRef.current?.abort()
+    sseAbortRef.current = null
+    const p = getProvider()
+    const prevState = get()
+    // Same-thread case: keep the existing blocks/lastSeq so the user does
+    // not see the view blank out for a turn that is already streaming.
+    // Cross-thread case: start empty (the fetch will populate history).
+    const keepExistingBlocks = prevState.activeThreadId === targetThreadId
+    resetBusyRecoveryAttempts()
+    clearBusyWatchdog()
+    set({
+      activeThreadId: targetThreadId,
+      blocks: keepExistingBlocks ? prevState.blocks : [],
+      lastSeq: keepExistingBlocks ? prevState.lastSeq : 0,
+      liveReasoning: '',
+      liveAssistant: '',
+      unreadThreadIds: { ...prevState.unreadThreadIds, [targetThreadId]: false },
+      busy: true,
+      currentTurnId: null,
+      currentTurnUserId: null,
+      turnStartedAtByUserId: {},
+      turnDurationByUserId: {},
+      turnReasoningFirstAtByUserId: {},
+      turnReasoningLastAtByUserId: {},
+      inspectorSelectedId: null,
+      queuedMessages: []
+    })
+    const ac = new AbortController()
+    sseAbortRef.current = ac
+    const sink = buildThreadEventSink(set, get, { threadId: targetThreadId, signal: ac.signal, sinceSeq: 0 })
+    subscribeThreadEventsWithRecovery(p, targetThreadId, 0, sink, ac.signal, get)
+    armBusyWatchdog(set, get)
+    // Pre-fetch persisted history in parallel. The SSE is already open
+    // and may have started accumulating deltas; the merge step below
+    // must not stomp on those buffers.
+    try {
+      const {
+        blocks: rawBlocks,
+        latestSeq,
+        threadStatus,
+        latestTurnId,
+        latestUserMessageId,
+        turnDurationByUserId = {},
+        goal,
+        todos
+      } = await p.getThreadDetail(targetThreadId)
+      if (ac.signal.aborted) return
+      const blocks = hydrateBlockModelLabels(targetThreadId, rawBlocks)
+      const busy = threadSnapshotLooksRunning(blocks, threadStatus)
+      const currentTurnUserId = busy
+        ? latestUserMessageId ?? findLatestUserBlockId(blocks)
+        : null
+      set((s) => ({
+        activeThreadGoal: goal ?? null,
+        activeThreadTodos: todos ?? null,
+        blocks,
+        // Bump lastSeq to the max of fetched and current so deltas
+        // received during the fetch window are not lost.
+        lastSeq: Math.max(latestSeq, s.lastSeq),
+        busy,
+        currentTurnId: busy ? latestTurnId ?? null : null,
+        currentTurnUserId,
+        turnDurationByUserId
+        // Note: `liveAssistant` and `liveReasoning` are intentionally
+        // NOT touched here. They may contain deltas that arrived during
+        // the fetch and must be preserved for `flushLiveBlocks` to pick
+        // them up at turn boundaries.
+      }))
+      if (!busy && get().queuedMessages.length > 0) {
+        void get().drainQueuedMessages()
+      }
+    } catch (e) {
+      // Fetch failure: keep the SSE open so the user still sees the
+      // streaming deltas, but surface the error in the UI.
+      if (ac.signal.aborted) return
+      set({
+        error: formatRuntimeError(e),
+        ...(shouldOpenSettingsForError(e)
+          ? { route: 'settings' as const, settingsSection: 'agents' as const }
+          : {})
+      })
+    }
+  },
+
   drainQueuedMessages: async () => {
     if (drainingQueuedMessages) return
     drainingQueuedMessages = true
@@ -460,6 +625,11 @@ export function createThreadActions(
       const reasoningEffort = overrides?.reasoningEffort?.trim()
       const attachmentIds = overrides?.attachmentIds?.filter((id) => id.trim().length > 0)
       const attachments = overrides?.attachments?.filter((attachment) => attachment.id.trim().length > 0)
+      const fileReferences = overrides?.fileReferences?.filter((reference) =>
+        reference.path.trim().length > 0 &&
+        reference.relativePath.trim().length > 0 &&
+        reference.name.trim().length > 0
+      )
       set((s) => ({
         queuedMessages: [
           ...s.queuedMessages,
@@ -474,7 +644,8 @@ export function createThreadActions(
             ...(reasoningEffort ? { reasoningEffort } : {}),
             ...(overrides?.guiPlan ? { guiPlan: overrides.guiPlan } : {}),
             ...(attachmentIds?.length ? { attachmentIds } : {}),
-            ...(attachments?.length ? { attachments } : {})
+            ...(attachments?.length ? { attachments } : {}),
+            ...(fileReferences?.length ? { fileReferences } : {})
           }
         ],
         error: null
@@ -496,6 +667,14 @@ export function createThreadActions(
     const attachments =
       queued?.attachments ??
       overrides?.attachments?.filter((attachment) => attachment.id.trim().length > 0) ??
+      []
+    const fileReferences =
+      queued?.fileReferences ??
+      overrides?.fileReferences?.filter((reference) =>
+        reference.path.trim().length > 0 &&
+        reference.relativePath.trim().length > 0 &&
+        reference.name.trim().length > 0
+      ) ??
       []
     let activeThreadId = get().activeThreadId
     const displayText = queued?.displayText ?? overrides?.displayText?.trim() ?? trimmedText
@@ -541,12 +720,13 @@ export function createThreadActions(
           createdAt: new Date(now).toISOString(),
           text: displayText,
           ...(userModelChip ? { modelLabel: userModelChip } : {}),
-          ...(userDisplayText || attachmentIds.length || attachments.length
+          ...(userDisplayText || attachmentIds.length || attachments.length || fileReferences.length
             ? {
                 meta: {
                   ...(userDisplayText ? { displayText: userDisplayText } : {}),
                   ...(attachmentIds.length ? { attachmentIds } : {}),
-                  ...(attachments.length ? { attachments } : {})
+                  ...(attachments.length ? { attachments } : {}),
+                  ...(fileReferences.length ? { fileReferences } : {})
                 }
               }
             : {})
@@ -672,7 +852,8 @@ export function createThreadActions(
         ...(reasoningEffort ? { reasoningEffort } : {}),
         ...(runtimeDisplayText ? { displayText: runtimeDisplayText } : {}),
         ...((queued?.guiPlan ?? overrides?.guiPlan) ? { guiPlan: queued?.guiPlan ?? overrides?.guiPlan } : {}),
-        ...(attachmentIds.length ? { attachmentIds } : {})
+        ...(attachmentIds.length ? { attachmentIds } : {}),
+        ...(fileReferences.length ? { fileReferences } : {})
       })
       // Mirror the composer model selection against the runtime's stable
       // user_message item id so the badge survives page refresh / thread

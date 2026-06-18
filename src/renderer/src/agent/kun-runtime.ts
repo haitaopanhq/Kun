@@ -241,6 +241,7 @@ export class KunRuntimeProvider implements AgentProvider {
         title?: string
       }
       attachmentIds?: string[]
+      fileReferences?: Array<{ path: string; relativePath: string; name: string; kind?: 'file' | 'directory' }>
     }
   ): Promise<{ turnId: string; threadId: string; userMessageItemId?: string }> {
     const settings = await rendererRuntimeClient.getSettings()
@@ -273,6 +274,9 @@ export class KunRuntimeProvider implements AgentProvider {
     }
     if (options?.attachmentIds?.length) {
       body.attachmentIds = options.attachmentIds
+    }
+    if (options?.fileReferences?.length) {
+      body.fileReferences = options.fileReferences
     }
     const response = await rendererRuntimeClient.runtimeRequest(
       kunThreadTurnsPath(threadId),
@@ -384,7 +388,7 @@ export class KunRuntimeProvider implements AgentProvider {
     }
   }
 
-  async compactThread(threadId: string, reason?: string): Promise<void> {
+  async compactThread(threadId: string, reason?: string): Promise<{ replacedTokens: number }> {
     const response = await rendererRuntimeClient.runtimeRequest(
       kunThreadCompactPath(threadId),
       'POST',
@@ -392,6 +396,19 @@ export class KunRuntimeProvider implements AgentProvider {
     )
     if (!response.ok) {
       throw runtimeErrorToError(readRuntimeError(response.body, 'compact thread failed'))
+    }
+    // Surface the folded token count so the UI can drop the context gauge
+    // immediately. Heuristic compaction has no usage event, and model-summary
+    // usage can arrive separately from the compact response. Best-effort: a
+    // parse hiccup must not turn a successful compaction into a thrown error.
+    try {
+      const body = readRuntimeJson<{ replacedTokens?: number }>(
+        response.body,
+        'runtime returned an invalid compact response'
+      )
+      return { replacedTokens: Math.max(0, Math.floor(body.replacedTokens ?? 0)) }
+    } catch {
+      return { replacedTokens: 0 }
     }
   }
 

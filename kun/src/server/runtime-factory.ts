@@ -20,6 +20,7 @@ import { buildSkillToolProviders } from '../adapters/tool/skill-tool-provider.js
 import { buildDelegationToolProviders } from '../adapters/tool/delegation-tool-provider.js'
 import { buildWebToolProviders } from '../adapters/tool/web-tool-provider.js'
 import { buildImageGenToolProviders } from '../adapters/tool/image-gen-tool-provider.js'
+import { buildComputerUseToolProviders } from '../adapters/tool/computer-use-tool-provider.js'
 import {
   buildMusicGenToolProviders,
   buildSpeechGenToolProviders,
@@ -42,11 +43,15 @@ import {
   type ModelConfig
 } from '../loop/model-context-profile.js'
 import {
+  DEFAULT_QUALITY_CONFIG,
   DEFAULT_STORAGE_CONFIG,
   expandHomePath,
+  type QualityConfig,
   type RuntimeTuningConfig,
   type StorageConfig
 } from '../config/kun-config.js'
+import { buildBuiltinHooks } from '../hooks/builtins/index.js'
+import { mergeBuiltinSubagentProfiles } from '../delegation/builtin-profiles.js'
 import { InflightTracker } from '../loop/inflight-tracker.js'
 import { SteeringQueue } from '../loop/steering-queue.js'
 import { RandomIdGenerator } from '../ports/id-generator.js'
@@ -78,6 +83,7 @@ export type KunServeRuntimeOptions = {
   runtimeToken: string
   apiKey: string
   baseUrl: string
+  modelProxyUrl?: string
   endpointFormat?: ModelEndpointFormat
   model: string
   approvalPolicy: ApprovalPolicy
@@ -92,6 +98,8 @@ export type KunServeRuntimeOptions = {
   capabilities?: KunCapabilitiesConfig
   /** Command hooks from config.json; resolved and wired into tool hosts and the loop. */
   hooks?: HooksConfig
+  /** Design-quality linter config; drives the builtin PostToolUse hook. */
+  quality?: QualityConfig
   startedAt?: string
 }
 
@@ -139,16 +147,6 @@ export async function createKunServeRuntime(
       'system: keep the stable Kun prefix byte-stable for prompt-cache reuse'
     ]
   })
-  const turnService = new TurnService({
-    threadStore,
-    sessionStore,
-    events,
-    inflight,
-    steering,
-    compactor,
-    ids,
-    nowIso
-  })
   const threadService = new ThreadService({ threadStore, sessionStore, events, ids, nowIso })
   const modelProfiles = modelContextProfilesFromConfig({
     contextCompaction: options.contextCompaction,
@@ -159,6 +157,7 @@ export async function createKunServeRuntime(
   const modelClient = new CompatModelClient({
     baseUrl: options.baseUrl,
     apiKey: options.apiKey,
+    modelProxyUrl: options.modelProxyUrl,
     endpointFormat: options.endpointFormat ?? DEFAULT_MODEL_ENDPOINT_FORMAT,
     model: options.model,
     modelCapabilities,
@@ -166,18 +165,6 @@ export async function createKunServeRuntime(
     ...(options.runtime?.streamIdleTimeoutMs !== undefined
       ? { streamIdleTimeoutMs: options.runtime.streamIdleTimeoutMs }
       : {})
-  })
-  const reviewService = new ReviewService({
-    threadStore,
-    turns: turnService,
-    model: modelClient,
-    defaultModel: options.model,
-    nowIso,
-    modelCapabilities,
-    ...(options.models ? { models: options.models } : {}),
-    ...(options.contextCompaction ? { contextCompaction: options.contextCompaction } : {}),
-    ...(tokenEconomy ? { tokenEconomy } : {}),
-    ...(options.runtime ? { runtime: options.runtime } : {})
   })
   // Independent I/O; all must still finish before the server listens.
   const [mcpProviders, skillRuntime] = await Promise.all([
@@ -192,6 +179,33 @@ export async function createKunServeRuntime(
   if (skillCatalog) {
     prefix = setSystemPrompt(prefix, `${KUN_SYSTEM_PROMPT}\n\n${skillCatalog}`)
   }
+  const turnService = new TurnService({
+    threadStore,
+    sessionStore,
+    events,
+    inflight,
+    steering,
+    compactor,
+    model: modelClient,
+    usage: usageService,
+    prefix,
+    defaultModel: options.model,
+    contextCompaction: options.contextCompaction,
+    ids,
+    nowIso
+  })
+  const reviewService = new ReviewService({
+    threadStore,
+    turns: turnService,
+    model: modelClient,
+    defaultModel: options.model,
+    nowIso,
+    modelCapabilities,
+    ...(options.models ? { models: options.models } : {}),
+    ...(options.contextCompaction ? { contextCompaction: options.contextCompaction } : {}),
+    ...(tokenEconomy ? { tokenEconomy } : {}),
+    ...(options.runtime ? { runtime: options.runtime } : {})
+  })
   const webProviders = buildWebToolProviders(options.capabilities?.web)
   const attachmentStore = options.capabilities?.attachments.enabled
     ? new FileAttachmentStore({
@@ -214,6 +228,7 @@ export async function createKunServeRuntime(
   const speechGenProviders = buildSpeechGenToolProviders(options.capabilities?.speechGen, { nowIso })
   const musicGenProviders = buildMusicGenToolProviders(options.capabilities?.musicGen, { nowIso })
   const videoGenProviders = buildVideoGenToolProviders(options.capabilities?.videoGen, { nowIso })
+  const computerUseProviders = await buildComputerUseToolProviders(options.capabilities?.computerUse)
   const baseToolProviders = [
     {
       id: 'builtin',
@@ -230,8 +245,17 @@ export async function createKunServeRuntime(
     ...speechGenProviders.providers,
     ...musicGenProviders.providers,
     ...videoGenProviders.providers
+    // NOTE: computer_use is intentionally NOT in baseToolProviders — host
+    // control must not be delegable to subagents. It is added to the main
+    // registry only (below).
   ]
-  const resolvedHooks = resolveConfiguredHooks(options.hooks)
+  // Builtin hooks are first-party and always assembled before config hooks.
+  // The design-quality linter folds findings into write/edit results so the
+  // model self-corrects; config-loaded command hooks run after it.
+  const resolvedHooks = [
+    ...buildBuiltinHooks({ quality: options.quality ?? DEFAULT_QUALITY_CONFIG }),
+    ...resolveConfiguredHooks(options.hooks)
+  ]
   const childRegistry = new CapabilityRegistry(baseToolProviders)
   const childToolHost = new LocalToolHost({
     registry: childRegistry,
@@ -240,7 +264,7 @@ export async function createKunServeRuntime(
   })
   const delegationRuntime = options.capabilities?.subagents.enabled
     ? new DelegationRuntime({
-        config: options.capabilities.subagents,
+        config: mergeBuiltinSubagentProfiles(options.capabilities.subagents),
         store: new FileDelegationStore(join(options.dataDir, 'child-runs')),
         events,
         nowIso,
@@ -314,10 +338,17 @@ export async function createKunServeRuntime(
     videoGen: {
       available: videoGenProviders.available,
       reason: videoGenProviders.diagnostics.find((diagnostic) => diagnostic.reason)?.reason
+    },
+    computerUse: {
+      available: computerUseProviders.available,
+      reason: computerUseProviders.diagnostics.find((diagnostic) => diagnostic.reason)?.reason
     }
   })
   const registry = new CapabilityRegistry([
     ...baseToolProviders,
+    // Host control is available to the top-level agent only, never to
+    // delegated subagents (which use childRegistry/baseToolProviders).
+    ...computerUseProviders.providers,
     {
       id: 'goal',
       kind: 'gui' as const,
@@ -408,6 +439,9 @@ export async function createKunServeRuntime(
     runTurn(threadId, turnId) {
       return loop.runTurn(threadId, turnId)
     },
+    resumeInterruptedGoals(threadIds) {
+      return loop.resumeInterruptedGoals(threadIds)
+    },
     runReview(input) {
       return reviewService.runReview(input)
     },
@@ -450,6 +484,7 @@ export async function createKunServeRuntime(
     skills: () => skillRuntime.diagnostics(),
     shutdown: async () => {
       try {
+        loop.shutdownGoalResume()
         await mcpProviders.close()
       } finally {
         await stores.shutdown?.()
@@ -537,12 +572,20 @@ export async function startKunServe(
     port: options.port
   })
   // Background sweep after listen: settle turns orphaned by a crash so
-  // clients stop spinning on them, without delaying readiness.
+  // clients stop spinning on them, without delaying readiness. Then resume
+  // goals that were interrupted mid-run so an active goal doesn't sit "in
+  // progress" forever with nothing running (KunAgent/Kun#370).
   void runtime.turnService
     .reconcileOrphanedTurns()
-    .then((count) => {
-      if (count > 0) {
-        console.warn(`[kun] marked ${count} orphaned turn(s) as failed after restart`)
+    .then(async (threadIds) => {
+      if (threadIds.length > 0) {
+        console.warn(`[kun] marked orphaned turn(s) on ${threadIds.length} thread(s) as failed after restart`)
+      }
+      if (threadIds.length > 0 && runtime.resumeInterruptedGoals) {
+        const resumed = await runtime.resumeInterruptedGoals(threadIds)
+        if (resumed > 0) {
+          console.warn(`[kun] auto-resumed ${resumed} interrupted goal(s) after restart`)
+        }
       }
     })
     .catch((error) => {

@@ -30,6 +30,7 @@ import {
   type WriteThreadRegistry
 } from '../write/write-thread-registry'
 import { isSddAssistantThread } from '../sdd/sdd-thread-registry'
+import { readThreadWorktreeRegistry, saveThreadWorktreeRegistry, forgetThreadWorktree } from '../lib/thread-worktree-registry'
 import { notifySddChatTranscriptMirror } from '../sdd/sdd-chat-transcript'
 import { useWriteWorkspaceStore } from '../write/write-workspace-store'
 import {
@@ -282,6 +283,29 @@ function notifyTurnComplete(threadId: string | null, state: ChatState, dedupeKey
         threadId
       }).catch(() => undefined)
     })
+}
+
+/**
+ * Release the worktree pool slot owned by a thread when the task completes.
+ * This makes worktree slots task-scoped (like Talkcody) rather than
+ * thread-scoped: the slot is returned to the pool as soon as the agent
+ * finishes responding, so the same slot can be reused by a future task.
+ *
+ * Fire-and-forget — a failure to release must not disrupt the UI flow.
+ * The deleteThread action still releases as a safety-net fallback.
+ */
+function releaseThreadWorktreeIfNeeded(threadId: string | null): void {
+  if (!threadId || typeof window === 'undefined') return
+  if (typeof window.kunGui?.releaseWorktree !== 'function') return
+  const record = readThreadWorktreeRegistry().worktrees[threadId]
+  if (!record) return
+  void window.kunGui
+    .releaseWorktree({
+      projectPath: record.projectPath,
+      poolIndex: record.poolIndex
+    })
+    .catch(() => undefined) // best-effort
+  saveThreadWorktreeRegistry(forgetThreadWorktree(threadId))
 }
 
 /**
@@ -766,6 +790,13 @@ export function buildThreadEventSink(
           base.busy = true
           armBusyWatchdog(set, get)
         }
+        // A standalone (manual `/compact`) compaction has no enclosing turn to
+        // flip the thread back to idle, so clear the transient busy flag it set
+        // on the `running` event once the compaction settles.
+        if (s.busy && ev.status !== 'running' && !s.currentTurnId) {
+          base.busy = false
+          clearBusyWatchdog()
+        }
         const idx = s.blocks.findIndex((b) => b.kind === 'compaction' && b.id === ev.itemId)
         if (idx >= 0) {
           const cur = s.blocks[idx]
@@ -1100,6 +1131,11 @@ export function buildThreadEventSink(
       notifySddChatTranscriptMirror(get)
       syncTurnCompletionPoll(set, get)
       void get().refreshThreads()
+      // Release worktree when the turn finishes and there are no queued
+      // follow-ups that would start a new turn in the same thread.
+      if (get().queuedMessages.length === 0) {
+        releaseThreadWorktreeIfNeeded(completedThreadId)
+      }
       void get().drainQueuedMessages()
     },
     onError: (err, options) => {
@@ -1144,6 +1180,9 @@ export function buildThreadEventSink(
       if (terminal) {
         syncTurnCompletionPoll(set, get)
         void get().refreshThreads?.()
+        if (get().queuedMessages.length === 0) {
+          releaseThreadWorktreeIfNeeded(state.activeThreadId)
+        }
         void get().drainQueuedMessages?.()
         return
       }

@@ -316,9 +316,9 @@ describe('syncGuiManagedKunConfig', () => {
       }
     })
     expect(parsed.contextCompaction).toMatchObject({
-      defaultSoftThreshold: 16000,
-      defaultHardThreshold: 24000,
-      summaryMode: 'heuristic'
+      defaultSoftThreshold: 96000,
+      defaultHardThreshold: 108800,
+      summaryMode: 'model'
     })
     expect(parsed.models.profiles['deepseek-v4-pro']).toMatchObject({
       contextWindowTokens: 1_000_000,
@@ -339,6 +339,7 @@ describe('syncGuiManagedKunConfig', () => {
     expect(parsed.runtime.toolStorm).toMatchObject({ enabled: true, windowSize: 8, threshold: 3 })
     expect(parsed.runtime.toolArgumentRepair).toMatchObject({ maxStringBytes: 524288 })
     expect(parsed.capabilities.attachments).toMatchObject({ enabled: true })
+    expect(parsed.capabilities.memory).toMatchObject({ enabled: false })
     expect(parsed.capabilities.web).toMatchObject({ enabled: true, fetchEnabled: true })
     expect(parsed.capabilities.mcp.search).toMatchObject({ enabled: false, mode: 'auto' })
     expect(parsed.capabilities.imageGen).toEqual({
@@ -366,6 +367,20 @@ describe('syncGuiManagedKunConfig', () => {
       timeoutMs: 900000,
       pollIntervalMs: 10000
     })
+  })
+
+  it('writes the memory capability from the GUI memory toggle', async () => {
+    if (!tempRoot) throw new Error('temp root not initialized')
+    const configPath = join(tempRoot, 'config.json')
+    const module = await import('./kun-process')
+
+    await module.syncGuiManagedKunConfig(tempRoot, {
+      ...defaultKunRuntimeSettings(),
+      memoryEnabled: true
+    })
+
+    const parsed = JSON.parse(readFileSync(configPath, 'utf8')) as any
+    expect(parsed.capabilities.memory).toMatchObject({ enabled: true })
   })
 
   it('writes the image generation capability and omits cleared fields', async () => {

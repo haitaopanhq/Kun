@@ -64,6 +64,16 @@ export const TOKENS_PER_SKILL = 45
 export const SYSTEM_PROMPT_BASE_TOKENS = 1600
 export const OTHER_BASE_TOKENS = 220
 
+// Guard against providers that over-report prompt_tokens by folding cumulative
+// cache reads into the per-request count. MiniMax-M3 was observed reporting
+// ~1.2M prompt tokens for a thread whose real content was ~33k (its reported
+// cache-hit tokens alone exceeded the entire conversation, which is impossible),
+// pinning this gauge at 100%. When the measured total dwarfs our own estimate of
+// the whole prompt by more than this factor, treat it as unreliable and fall
+// back to the estimate. Wide enough to absorb honest under-counting (images,
+// formatting) while still catching order-of-magnitude inflation.
+export const PROMPT_TOKEN_TRUST_FACTOR = 6
+
 const CJK_TOKENS_PER_CHAR = 0.9
 const ASCII_CHARS_PER_TOKEN = 4
 
@@ -95,6 +105,35 @@ export function estimateTokensFromText(text: string): number {
   return Math.ceil(cjk * CJK_TOKENS_PER_CHAR + ascii / ASCII_CHARS_PER_TOKEN)
 }
 
+// A screenshot or embedded image is forwarded to the model as a bounded vision
+// payload, not as its raw base64 text — the runtime strips the base64 at
+// send-time and charges a flat per-image cost (see kun tool-result-image.ts).
+// A tool result's `detail` here is JSON.stringify(output), which still carries
+// the raw base64 (often hundreds of thousands of characters). Tokenizing that
+// as text would read a single screenshot as ~100k+ tokens and peg the gauge at
+// 100% after one computer_use turn, so we mirror the runtime and discount it.
+const FLAT_IMAGE_TOKENS = 1200
+// A contiguous run of base64-alphabet characters this long is an encoded image
+// or binary blob, never prose — real text breaks on whitespace/punctuation long
+// before this. Pretty-printed JSON keeps each base64 value on one line.
+const BASE64_RUN_RE = /[A-Za-z0-9+/]{1000,}={0,2}/g
+
+/**
+ * Estimate tokens for a tool/compaction `detail` string while discounting
+ * embedded base64 image/binary payloads to a flat per-image cost. Never
+ * inflates a false-positive match: each run is charged the *lesser* of its raw
+ * text estimate and the flat image cost, so non-image content is unaffected.
+ */
+function estimateDetailTokens(detail: string): number {
+  if (!detail) return 0
+  let imageTokens = 0
+  const stripped = detail.replace(BASE64_RUN_RE, (run) => {
+    imageTokens += Math.min(estimateTokensFromText(run), FLAT_IMAGE_TOKENS)
+    return ''
+  })
+  return estimateTokensFromText(stripped) + imageTokens
+}
+
 /**
  * Estimate the model-visible tokens for a single block. Cheap and pure so the
  * caller can memoize per block (block identity is stable across streaming
@@ -107,10 +146,16 @@ export function estimateBlockTokens(block: ChatBlock): number {
     case 'reasoning':
       return estimateTokensFromText(block.text ?? '')
     case 'system':
-      return estimateTokensFromText(block.text ?? '') + estimateTokensFromText(block.detail ?? '')
+      return estimateTokensFromText(block.text ?? '') + estimateDetailTokens(block.detail ?? '')
     case 'tool':
+      return estimateDetailTokens(block.detail ?? '')
     case 'compaction':
-      return estimateTokensFromText(block.detail ?? '')
+      // After compaction the runtime drops the folded history and re-sends the
+      // `summary` as a system message — that summary IS the post-compaction
+      // conversation, so it is what occupies the window. `detail` is only the
+      // short pinned-constraints line; counting it alone collapses the whole
+      // conversation to a handful of tokens (the "消息: 7" surprise).
+      return estimateDetailTokens(block.summary ?? '')
     default:
       return 0
   }
@@ -130,8 +175,18 @@ export function buildContextCapacity(input: ContextCapacityInput): ContextCapaci
   const otherEstimate = OTHER_BASE_TOKENS
   const prefixEstimate = toolsEstimate + skillsEstimate + systemEstimate + otherEstimate
 
-  const hasMeasuredTotal =
+  // The measured prompt-token total is the source of truth only while it stays
+  // within a sane multiple of what we estimate the whole prompt to be. Beyond
+  // that it is a provider accounting artifact (see PROMPT_TOKEN_TRUST_FACTOR);
+  // fall back to the estimate so the gauge reflects the real, much smaller
+  // context rather than being stranded at 100%.
+  const localEstimate = messageEstimate + prefixEstimate
+  const measuredTotal =
     typeof input.lastTurnInputTokens === 'number' && input.lastTurnInputTokens > 0
+      ? input.lastTurnInputTokens
+      : 0
+  const hasMeasuredTotal =
+    measuredTotal > 0 && measuredTotal <= localEstimate * PROMPT_TOKEN_TRUST_FACTOR
 
   let tools: number
   let system: number
@@ -143,7 +198,7 @@ export function buildContextCapacity(input: ContextCapacityInput): ContextCapaci
   if (hasMeasuredTotal) {
     // Real total; estimate the breakdown but scale the prefix so the parts add
     // up to the measured occupancy exactly.
-    usedTokens = clamp(Math.round(input.lastTurnInputTokens as number), 0, windowTokens)
+    usedTokens = clamp(Math.round(measuredTotal), 0, windowTokens)
     messages = clamp(messageEstimate, 0, usedTokens)
     const prefixActual = Math.max(0, usedTokens - messages)
     const scale = prefixEstimate > 0 ? prefixActual / prefixEstimate : 0

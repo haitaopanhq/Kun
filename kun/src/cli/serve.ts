@@ -93,6 +93,12 @@ export function parseServeOptions(
             env.DEEPSEEK_BASE_URL ??
             configServe.baseUrl ??
             DEFAULT_SERVE_OPTIONS.baseUrl,
+    modelProxyUrl:
+      typeof raw['model-proxy-url'] === 'string'
+        ? raw['model-proxy-url']
+        : typeof raw.modelProxyUrl === 'string'
+          ? raw.modelProxyUrl
+          : configServe.modelProxyUrl ?? DEFAULT_SERVE_OPTIONS.modelProxyUrl,
     endpointFormat:
       typeof raw['endpoint-format'] === 'string'
         ? raw['endpoint-format'] as ServeOptions['endpointFormat']
@@ -137,7 +143,8 @@ export function parseServeOptions(
     contextCompaction: loadedConfig?.config.contextCompaction,
     runtime: loadedConfig?.config.runtime,
     capabilities: loadedConfig?.config.capabilities ?? DEFAULT_SERVE_OPTIONS.capabilities,
-    hooks: loadedConfig?.config.hooks
+    hooks: loadedConfig?.config.hooks,
+    quality: loadedConfig?.config.quality
   }
   return ServeOptionsSchema.parse(merged)
 }

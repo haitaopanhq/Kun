@@ -2,7 +2,7 @@ import type { NormalizedThread } from '../agent/types'
 import { getProvider } from '../agent/registry'
 import { rendererRuntimeClient } from '../agent/runtime-client'
 import i18n from '../i18n'
-import { applyTheme, applyUiFontScale, applyWriteTypography } from '../lib/apply-theme'
+import { applyCursorSpotlight, applyTheme, applyUiFontScale, applyWriteTypography } from '../lib/apply-theme'
 import { formatWorkspacePickerError } from '../lib/format-workspace-picker-error'
 import { formatRuntimeError, getRuntimeErrorCode } from '../lib/format-runtime-error'
 import {
@@ -367,6 +367,7 @@ export function createNavigationActions(
         const needsInitialSetup = !getActiveAgentApiKey(settings).trim()
         applyTheme(settings.theme)
         applyUiFontScale(settings.uiFontScale)
+        applyCursorSpotlight(settings.cursorSpotlight !== false)
         if (settings.write?.typography) applyWriteTypography(settings.write.typography)
         await get().applyI18nFromSettings(settings.locale)
         if (!runtimeStatusUnsubscribe && typeof window.kunGui.onRuntimeStatus === 'function') {
@@ -408,7 +409,11 @@ export function createNavigationActions(
               void get().refreshThreads()
               if (state.route === 'claw' && state.activeClawChannelId === channelId) {
                 if (state.activeThreadId !== threadId) {
-                  await get().selectThread(threadId)
+                  // Live-only SSE: skip the HTTP getThreadDetail fetch so the
+                  // chat view sees the Feishu bot's deltas as they arrive.
+                  // The first explicit click on this thread will fall through
+                  // to selectThread and pull the persisted blocks.
+                  await get().subscribeThreadEventsLive(threadId)
                 } else {
                   await get().recoverActiveTurn()
                 }

@@ -243,6 +243,31 @@ function normalizeWebSources(value: unknown): Array<Record<string, string>> | un
   return sources.length > 0 ? sources : undefined
 }
 
+function normalizeUserFileReferences(value: unknown): Array<{
+  path: string
+  relativePath: string
+  name: string
+  kind?: 'file' | 'directory'
+}> | undefined {
+  if (!Array.isArray(value)) return undefined
+  const references = value
+    .map((entry) => {
+      if (!entry || typeof entry !== 'object') return null
+      const raw = entry as Record<string, unknown>
+      const path = typeof raw.path === 'string' && raw.path.trim() ? raw.path.trim() : ''
+      const relativePath =
+        typeof raw.relativePath === 'string' && raw.relativePath.trim() ? raw.relativePath.trim() : ''
+      const name = typeof raw.name === 'string' && raw.name.trim() ? raw.name.trim() : ''
+      const kind = raw.kind === 'directory' ? 'directory' : 'file'
+      if (!path || !relativePath || !name) return null
+      return { path, relativePath, name, kind }
+    })
+    .filter((entry): entry is { path: string; relativePath: string; name: string; kind: 'file' | 'directory' } =>
+      entry !== null
+    )
+  return references.length > 0 ? references : undefined
+}
+
 function applyRuntimeDisclosureMeta(
   meta: Record<string, unknown>,
   item: CoreTurnItemJson,
@@ -251,12 +276,14 @@ function applyRuntimeDisclosureMeta(
   const attachmentIds = stringArray(item.attachmentIds)
   const activeSkillIds = stringArray(item.activeSkillIds)
   const injectedMemoryIds = stringArray(item.injectedMemoryIds)
+  const fileReferences = normalizeUserFileReferences(item.fileReferences)
   const normalizedChild = normalizeChildMetadata(child)
   const displayText = typeof item.displayText === 'string' ? item.displayText.trim() : ''
   if (displayText && displayText !== item.text?.trim()) {
     meta.displayText = displayText
   }
   if (attachmentIds) meta.attachmentIds = attachmentIds
+  if (fileReferences) meta.fileReferences = fileReferences
   if (activeSkillIds) meta.activeSkillIds = activeSkillIds
   if (injectedMemoryIds) meta.injectedMemoryIds = injectedMemoryIds
   if (typeof item.skillInjectionBytes === 'number') {
@@ -706,7 +733,7 @@ function compactionBlockFromItem(item: CoreTurnItemJson): ChatBlock {
     status: item.status === 'failed' ? 'error' : 'success',
     messagesBefore: item.replacedTokens,
     detail: item.pinnedConstraints?.join('\n'),
-    auto: true
+    auto: item.auto ?? true
   }
 }
 
@@ -907,7 +934,7 @@ function compactionFromItem(item: CoreTurnItemJson): CompactionEventPayload {
     createdAt: itemCreatedAt(item),
     messagesBefore: item.replacedTokens,
     detail: item.pinnedConstraints?.length ? item.pinnedConstraints.join('\n') : undefined,
-    auto: true
+    auto: item.auto ?? true
   }
 }
 
@@ -985,7 +1012,7 @@ function compactionFromEvent(
     createdAt: event.timestamp,
     messagesBefore: event.replacedTokens,
     detail: event.pinnedConstraints?.join('\n'),
-    auto: true
+    auto: event.auto ?? true
   }
 }
 

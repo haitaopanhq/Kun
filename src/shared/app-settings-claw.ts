@@ -31,6 +31,10 @@ type LegacyClawImSettingsPatch = Partial<ClawImSettingsV1> & {
   openClawGatewayUrl?: unknown
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
 function defaultClawChannelLabel(provider: ClawImProvider): string {
   return provider === 'weixin' ? 'weixin agent' : 'feishu agent'
 }
@@ -82,14 +86,15 @@ export function defaultClawSettings(): ClawSettingsV1 {
 
 export function normalizeClawSettings(input: ClawSettingsPatchV1 | undefined): ClawSettingsV1 {
   const defaults = defaultClawSettings()
-  const source = input ?? {}
-  const skills = source.skills ?? defaults.skills
-  const im = (source.im ?? defaults.im) as LegacyClawImSettingsPatch
+  const source = isRecord(input) ? input as ClawSettingsPatchV1 : {}
+  const skills = isRecord(source.skills) ? source.skills : defaults.skills
+  const im = (isRecord(source.im) ? source.im : defaults.im) as LegacyClawImSettingsPatch
   const weixinBridgeUrl = typeof im.weixinBridgeUrl === 'string' ? im.weixinBridgeUrl.trim() : ''
   const legacyOpenClawGatewayUrl =
     typeof im.openClawGatewayUrl === 'string' ? im.openClawGatewayUrl.trim() : ''
   const rawChannels = Array.isArray(source.channels)
     ? source.channels.filter((channel) => {
+        if (!isRecord(channel)) return false
         const raw = channel as Partial<ClawImChannelV1>
         return (
           raw.provider === undefined ||
@@ -155,7 +160,11 @@ export function normalizeClawSettings(input: ClawSettingsPatchV1 | undefined): C
               ? { welcomeSentAt: raw.welcomeSentAt }
               : {}),
             createdAt: typeof raw.createdAt === 'string' && raw.createdAt ? raw.createdAt : now,
-            updatedAt: typeof raw.updatedAt === 'string' && raw.updatedAt ? raw.updatedAt : now
+            updatedAt: typeof raw.updatedAt === 'string' && raw.updatedAt ? raw.updatedAt : now,
+            // Per-channel feishuStream. Default is off (false); only flip to
+            // true when the user explicitly enables streaming for this
+            // specific Feishu / Lark channel.
+            feishuStream: normalizeBoolean(raw.feishuStream, false)
           }
         }),
     tasks: Array.isArray(source.tasks)

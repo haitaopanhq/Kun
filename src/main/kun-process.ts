@@ -9,6 +9,7 @@ import { promisify } from 'node:util'
 import {
   defaultKunTokenEconomySettings,
   isKunRuntimeInsecure,
+  resolveModelProviderProxyUrl,
   resolveKunRuntimeSettings,
   type ModelProviderModelProfileV1,
   type KunRuntimeSettingsV1,
@@ -23,10 +24,12 @@ import {
   KunServeConfigSchema,
   ModelConfigSchema,
   ContextCompactionConfigSchema,
+  QualityConfigSchema,
   RuntimeTuningConfigSchema
 } from '../../kun/src/config/kun-config.js'
 import {
   AttachmentsCapabilityConfig,
+  ComputerUseCapabilityConfig,
   ImageGenCapabilityConfig,
   McpCapabilityConfig,
   McpServerConfig,
@@ -221,6 +224,16 @@ function appRoot(): string {
     : app.getAppPath()
 }
 
+function resolveNodeScriptCommand(command: string): string {
+  if (command !== process.execPath) return command
+  if (process.platform !== 'darwin') return command
+  return resolveClawScheduleMcpCommand({
+    appPath: app.getAppPath(),
+    execPath: command,
+    isPackaged: app.isPackaged
+  })
+}
+
 export function resolveKunDataDir(runtime: { dataDir: string }): string {
   const trimmed = runtime.dataDir?.trim()
   if (trimmed) return expandHomePath(trimmed)
@@ -287,6 +300,7 @@ async function startKunChildOnce(
     port: runtime.port,
     dataDir,
     baseUrl: runtime.baseUrl,
+    modelProxyUrl: resolveModelProviderProxyUrl(settings),
     endpointFormat: runtime.endpointFormat,
     model: runtime.model,
     approvalPolicy: runtime.approvalPolicy,
@@ -294,13 +308,24 @@ async function startKunChildOnce(
     tokenEconomyMode: runtime.tokenEconomyMode,
     insecure: isKunRuntimeInsecure(runtime)
   })
-  child = spawn(resolution.command, args, {
-    env: {
-      ...process.env,
-      ELECTRON_RUN_AS_NODE: '1',
-      KUN_RUNTIME_TOKEN: runtime.runtimeToken,
-      DEEPSEEK_API_KEY: runtime.apiKey || process.env.DEEPSEEK_API_KEY || ''
-    },
+  // On macOS, libnut links AppKit and calls `[NSApplication sharedApplication]`
+  // on its first screen-grab/mouse/keyboard call. That promotes a pure-Node
+  // (ELECTRON_RUN_AS_NODE) child to a regular Cocoa app and a second Kun icon
+  // appears in the Dock. When computer-use is enabled we instead spawn kun as
+  // a real Electron instance so it can call `app.dock.hide()` itself (see
+  // kun/src/cli/serve-entry.ts). The extra Chromium overhead is only paid
+  // when the user actually opted into host control.
+  const runAsElectron = process.platform === 'darwin' && runtime.computerUse?.enabled === true
+  const command = runAsElectron ? resolution.command : resolveNodeScriptCommand(resolution.command)
+  const childEnv: NodeJS.ProcessEnv = {
+    ...process.env,
+    KUN_RUNTIME_TOKEN: runtime.runtimeToken,
+    DEEPSEEK_API_KEY: runtime.apiKey || process.env.DEEPSEEK_API_KEY || ''
+  }
+  if (!runAsElectron) childEnv.ELECTRON_RUN_AS_NODE = '1'
+  else delete childEnv.ELECTRON_RUN_AS_NODE
+  child = spawn(command, args, {
+    env: childEnv,
     stdio: ['ignore', 'pipe', 'pipe'],
     detached: false
   })
@@ -362,8 +387,10 @@ export async function syncGuiManagedKunConfig(
     | 'textToSpeech'
     | 'musicGeneration'
     | 'videoGeneration'
+    | 'computerUse'
     | 'modelProfiles'
     | 'memoryEnabled'
+    | 'quality'
   >,
   options?: {
     scheduleMcp?: {
@@ -387,17 +414,19 @@ export async function syncGuiManagedKunConfig(
   const existingContextCompaction = objectValue(existing?.contextCompaction)
   const existingModels = objectValue(existing?.models)
   const existingRuntimeTuning = objectValue(existing?.runtime)
+  const existingQuality = objectValue(existing?.quality)
   const capabilities = objectValue(existing?.capabilities)
   const mcp = objectValue(capabilities.mcp)
   const search = objectValue(mcp.search)
   const attachments = objectValue(capabilities.attachments)
+  const memory = objectValue(capabilities.memory)
   const web = objectValue(capabilities.web)
   const skills = objectValue(capabilities.skills)
   const imageGen = objectValue(capabilities.imageGen)
   const speechGen = objectValue(capabilities.speechGen)
   const musicGen = objectValue(capabilities.musicGen)
   const videoGen = objectValue(capabilities.videoGen)
-  const memory = objectValue(capabilities.memory)
+  const computerUse = objectValue(capabilities.computerUse)
   const storage = storageConfigForRuntime(runtime.storage)
   const mcpSearch = runtime.mcpSearch
   const skillCapability = await skillCapabilityConfigForRuntime(skills, options?.scheduleMcp?.settings)
@@ -410,6 +439,7 @@ export async function syncGuiManagedKunConfig(
     models: modelConfigForRuntime(existingModels, runtime.modelProfiles),
     contextCompaction: contextCompactionConfigForRuntime(runtime.contextCompaction, existingContextCompaction),
     runtime: runtimeTuningConfigForRuntime(runtime.runtimeTuning, existingRuntimeTuning),
+    quality: qualityConfigForRuntime(runtime.quality, existingQuality),
     capabilities: {
       ...capabilities,
       attachments: {
@@ -426,6 +456,7 @@ export async function syncGuiManagedKunConfig(
       speechGen: speechGenConfigForRuntime(runtime.textToSpeech, speechGen),
       musicGen: musicGenConfigForRuntime(runtime.musicGeneration, musicGen),
       videoGen: videoGenConfigForRuntime(runtime.videoGeneration, videoGen),
+      computerUse: computerUseConfigForRuntime(runtime.computerUse, computerUse),
       memory: {
         ...memory,
         enabled: runtime.memoryEnabled
@@ -742,6 +773,22 @@ function contextCompactionConfigForRuntime(
   }
 }
 
+function computerUseConfigForRuntime(
+  computerUse: Pick<KunRuntimeSettingsV1, 'computerUse'>['computerUse'],
+  existing: Record<string, unknown>
+): Record<string, unknown> {
+  // GUI owns enabled/mode/limits. `existing` was already passed through the
+  // strict ComputerUseCapabilityConfig sanitizer, so unknown hand-edited keys
+  // were dropped before reaching here; the spread only carries known fields.
+  return {
+    ...existing,
+    enabled: computerUse.enabled,
+    mode: computerUse.mode,
+    maxImageDimension: computerUse.maxImageDimension,
+    maxActionsPerTurn: computerUse.maxActionsPerTurn
+  }
+}
+
 function imageGenConfigForRuntime(
   imageGeneration: Pick<KunRuntimeSettingsV1, 'imageGeneration'>['imageGeneration'],
   existing: Record<string, unknown>
@@ -866,6 +913,20 @@ function runtimeTuningConfigForRuntime(
   }
 }
 
+function qualityConfigForRuntime(
+  quality: Pick<KunRuntimeSettingsV1, 'quality'>['quality'],
+  existing: Record<string, unknown>
+): Record<string, unknown> {
+  return {
+    ...existing,
+    enabled: quality.enabled,
+    strictness: quality.strictness,
+    ignoreRules: [...quality.ignoreRules],
+    ignoreFiles: [...quality.ignoreFiles],
+    maxFindings: quality.maxFindings
+  }
+}
+
 async function readJsonObjectIfExists(path: string): Promise<Record<string, unknown> | null> {
   try {
     const text = await readFile(path, 'utf8')
@@ -909,6 +970,9 @@ function sanitizeKunCapabilitiesConfig(value: unknown): Record<string, unknown> 
   if ('speechGen' in raw) next.speechGen = parseKunConfigSection(SpeechGenCapabilityConfig, raw.speechGen)
   if ('musicGen' in raw) next.musicGen = parseKunConfigSection(MusicGenCapabilityConfig, raw.musicGen)
   if ('videoGen' in raw) next.videoGen = parseKunConfigSection(VideoGenCapabilityConfig, raw.videoGen)
+  if ('computerUse' in raw) {
+    next.computerUse = parseKunConfigSection(ComputerUseCapabilityConfig, raw.computerUse)
+  }
   return next
 }
 
@@ -924,6 +988,7 @@ function sanitizeKunConfigSections(
       existing.contextCompaction
     ),
     runtime: parseKunConfigSection(RuntimeTuningConfigSchema, existing.runtime),
+    quality: parseKunConfigSection(QualityConfigSchema, existing.quality),
     capabilities: sanitizeKunCapabilitiesConfig(existing.capabilities)
   }
 }

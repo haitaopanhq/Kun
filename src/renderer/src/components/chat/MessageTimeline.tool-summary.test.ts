@@ -165,6 +165,37 @@ describe('MessageTimeline Kun runtime metadata smoke', () => {
     expect(html).not.toContain('ds-media-printer-reveal')
   })
 
+  it('renders user file references under the sent prompt', () => {
+    const block: ChatBlock = {
+      kind: 'user',
+      id: 'user_files',
+      text: '看一下这些文件',
+      meta: {
+        fileReferences: [
+          {
+            path: '/workspace/deepseek-gui/src/App.tsx',
+            relativePath: 'src/App.tsx',
+            name: 'App.tsx',
+            kind: 'file'
+          },
+          {
+            path: '/workspace/deepseek-gui/src',
+            relativePath: 'src',
+            name: 'src',
+            kind: 'directory'
+          }
+        ]
+      }
+    }
+
+    const html = renderToStaticMarkup(createElement(MessageBubble, { block }))
+
+    expect(html).toContain('看一下这些文件')
+    expect(html).toContain('Referenced files 2')
+    expect(html).toContain('src/App.tsx')
+    expect(html).toContain('src/')
+  })
+
   it('renders generated image previews with the printer reveal effect', () => {
     const block: ToolBlock = toolBlock({
       id: 'tool_img',
@@ -533,6 +564,39 @@ describe('MessageTimeline Kun runtime metadata smoke', () => {
     expect(html).not.toContain('running timeline detail should stay collapsed')
   })
 
+  it('renders running compaction as a lightweight status divider', () => {
+    const blocks: ChatBlock[] = [
+      {
+        kind: 'compaction',
+        id: 'compact_1',
+        summary: 'Context compacted',
+        status: 'running',
+        auto: false
+      }
+    ]
+    useChatStore.setState({
+      busy: true,
+      currentTurnUserId: null,
+      turnStartedAtByUserId: {}
+    })
+
+    const html = renderToStaticMarkup(
+      createElement(MessageTimeline, {
+        blocks,
+        liveReasoning: '',
+        live: '',
+        activeThreadId: 'thr_1',
+        runtimeConnection: 'ready',
+        onRetryConnection: () => undefined,
+        onOpenSettings: () => undefined
+      })
+    )
+
+    expect(html).toContain('role="status"')
+    expect(html).toMatch(/Compacting context|compactionRunning|正在压缩上下文/)
+    expect(html).not.toContain('aria-expanded=')
+  })
+
   it('keeps completed runtime errors visible instead of folding them into the work summary', () => {
     const blocks: ChatBlock[] = [
       {
@@ -588,5 +652,45 @@ describe('MessageTimeline Kun runtime metadata smoke', () => {
   it('pushes the live progress row above the goal banner when a goal is active', () => {
     expect(liveTurnProgressClass(true)).toContain('mb-16 md:mb-20')
     expect(liveTurnProgressClass(false)).not.toContain('mb-16 md:mb-20')
+  })
+
+  it('renders the live assistant bubble while busy is true (streaming period)', () => {
+    // Streaming period: the user has just sent a turn, the agent is
+    // running, and the SSE has streamed some `live` text into the chat
+    // store. The chat view must surface the streamed text immediately
+    // (e.g. for the Feishu bot case), not wait until turn_completed.
+    //
+    // We assert against the `ds-chat-answer` class which is only emitted
+    // by the live assistant `MessageBubble`. The process-section fold
+    // in `deriveTurnSections` would render the same text via
+    // `ProcessSectionRow`, so a plain text assertion is not specific
+    // enough — we want the actual `live-assistant` bubble here.
+    const blocks: ChatBlock[] = [
+      {
+        kind: 'user',
+        id: 'user_1',
+        text: 'say hi'
+      }
+    ]
+    useChatStore.setState({
+      busy: true,
+      currentTurnUserId: 'user_1',
+      turnStartedAtByUserId: { user_1: Date.now() }
+    })
+
+    const html = renderToStaticMarkup(
+      createElement(MessageTimeline, {
+        blocks,
+        liveReasoning: '',
+        live: 'hello',
+        activeThreadId: 'thr_1',
+        runtimeConnection: 'ready',
+        onRetryConnection: () => undefined,
+        onOpenSettings: () => undefined
+      })
+    )
+
+    expect(html).toContain('ds-chat-answer')
+    expect(html).toContain('hello')
   })
 })

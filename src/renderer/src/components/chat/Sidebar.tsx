@@ -101,7 +101,6 @@ export function Sidebar({
   const addClawChannel = useChatStore((s) => s.addClawChannel)
   const deleteClawChannel = useChatStore((s) => s.deleteClawChannel)
   const resetClawChannelSession = useChatStore((s) => s.resetClawChannelSession)
-
   const [imDialogMode, setImDialogMode] = useState<ClawImDialogMode | null>(null)
 
   const activeClawChannel = useMemo(
@@ -303,6 +302,7 @@ function FocusModeToggle({
   return (
     <button
       type="button"
+      data-cursor-spotlight-target
       role="switch"
       aria-checked={enabled}
       aria-label={ariaLabel}

@@ -15,7 +15,10 @@ import {
   MODEL_REASONING_REQUEST_PROTOCOLS,
   normalizeModelEndpointFormat,
   type AppSettingsV1,
+  type KunComputerUseSettingsV1,
   type KunContextCompactionSettingsV1,
+  type KunDesignQualitySettingsV1,
+  type KunDesignQualityStrictness,
   type KunHistoryHygieneSettingsV1,
   type KunImageGenerationSettingsV1,
   type KunMcpSearchSettingsV1,
@@ -138,7 +141,28 @@ export function defaultKunRuntimeSettings(
     musicGeneration: defaultKunMusicGenerationSettings(),
     videoGeneration: defaultKunVideoGenerationSettings(),
     modelProfiles: {},
-    memoryEnabled: false
+    memoryEnabled: false,
+    computerUse: defaultKunComputerUseSettings(),
+    quality: defaultKunQualitySettings()
+  }
+}
+
+export function defaultKunQualitySettings(): KunDesignQualitySettingsV1 {
+  return {
+    enabled: true,
+    strictness: 'standard',
+    ignoreRules: [],
+    ignoreFiles: [],
+    maxFindings: 12
+  }
+}
+
+export function defaultKunComputerUseSettings(): KunComputerUseSettingsV1 {
+  return {
+    enabled: false,
+    mode: 'auto',
+    maxImageDimension: 1280,
+    maxActionsPerTurn: 40
   }
 }
 
@@ -251,9 +275,12 @@ export function defaultKunStorageSettings(): KunStorageSettingsV1 {
 
 export function defaultKunContextCompactionSettings(): KunContextCompactionSettingsV1 {
   return {
-    defaultSoftThreshold: 16_000,
-    defaultHardThreshold: 24_000,
-    summaryMode: 'heuristic',
+    defaultSoftThreshold: 96_000,
+    defaultHardThreshold: 108_800,
+    // Default to model-generated summaries (codex-style): the model writes a
+    // structured recap of the folded turns instead of a mechanical item list.
+    // Falls back to the heuristic summary automatically on timeout/failure.
+    summaryMode: 'model',
     summaryTimeoutMs: 15_000,
     summaryMaxTokens: 1_200,
     summaryInputMaxBytes: 96 * 1024
@@ -329,10 +356,18 @@ export function mergeKunRuntimeSettings(
     ...(patch?.storage ?? {})
   })
   const currentContextCompaction = normalizeKunContextCompactionSettings(current.contextCompaction)
-  const nextContextCompaction = normalizeKunContextCompactionSettings({
+  const contextCompactionPatch = patch?.contextCompaction ?? {}
+  const nextContextCompactionInput = {
     ...currentContextCompaction,
-    ...(patch?.contextCompaction ?? {})
-  })
+    ...contextCompactionPatch
+  }
+  if (
+    contextCompactionPatch.defaultSoftThreshold !== undefined &&
+    contextCompactionPatch.defaultHardThreshold === undefined
+  ) {
+    nextContextCompactionInput.defaultHardThreshold = contextCompactionPatch.defaultSoftThreshold
+  }
+  const nextContextCompaction = normalizeKunContextCompactionSettings(nextContextCompactionInput)
   const currentImageGeneration = normalizeKunImageGenerationSettings(current.imageGeneration)
   const nextImageGeneration = normalizeKunImageGenerationSettings({
     ...currentImageGeneration,
@@ -357,6 +392,16 @@ export function mergeKunRuntimeSettings(
   const nextVideoGeneration = normalizeKunVideoGenerationSettings({
     ...currentVideoGeneration,
     ...(patch?.videoGeneration ?? {})
+  })
+  const currentComputerUse = normalizeKunComputerUseSettings(current.computerUse)
+  const nextComputerUse = normalizeKunComputerUseSettings({
+    ...currentComputerUse,
+    ...(patch?.computerUse ?? {})
+  })
+  const currentQuality = normalizeKunQualitySettings(current.quality)
+  const nextQuality = normalizeKunQualitySettings({
+    ...currentQuality,
+    ...(patch?.quality ?? {})
   })
   const currentRuntimeTuning = normalizeKunRuntimeTuningSettings(current.runtimeTuning)
   const nextRuntimeTuning = normalizeKunRuntimeTuningSettings({
@@ -393,7 +438,9 @@ export function mergeKunRuntimeSettings(
     musicGeneration: nextMusicGeneration,
     videoGeneration: nextVideoGeneration,
     modelProfiles: nextModelProfiles,
-    memoryEnabled: patch?.memoryEnabled ?? current.memoryEnabled ?? false
+    memoryEnabled: patch?.memoryEnabled ?? current.memoryEnabled ?? false,
+    computerUse: nextComputerUse,
+    quality: nextQuality
   }
 }
 
@@ -505,6 +552,21 @@ function normalizeKunVideoGenerationProtocol(value: unknown): VideoGenerationPro
   return value === 'minimax-video' ? 'minimax-video' : DEFAULT_VIDEO_GENERATION_PROTOCOL
 }
 
+function normalizeKunComputerUseSettings(
+  input: Partial<KunComputerUseSettingsV1> | undefined
+): KunComputerUseSettingsV1 {
+  const defaults = defaultKunComputerUseSettings()
+  const mode = input?.mode === 'always' || input?.mode === 'off' || input?.mode === 'auto'
+    ? input.mode
+    : defaults.mode
+  return {
+    enabled: input?.enabled === true,
+    mode,
+    maxImageDimension: boundedPositiveInt(input?.maxImageDimension, defaults.maxImageDimension, 4096),
+    maxActionsPerTurn: boundedPositiveInt(input?.maxActionsPerTurn, defaults.maxActionsPerTurn, 1000)
+  }
+}
+
 function normalizeAudioFormat(value: unknown, fallback: string): string {
   if (typeof value !== 'string') return fallback
   const normalized = value.trim().toLowerCase()
@@ -604,7 +666,10 @@ function normalizeKunContextCompactionSettings(
 ): KunContextCompactionSettingsV1 {
   const defaults = defaultKunContextCompactionSettings()
   const defaultSoftThreshold = boundedPositiveInt(input?.defaultSoftThreshold, defaults.defaultSoftThreshold)
-  const requestedHardThreshold = boundedPositiveInt(input?.defaultHardThreshold, defaults.defaultHardThreshold)
+  const defaultHardThreshold = input?.defaultSoftThreshold !== undefined && input?.defaultHardThreshold === undefined
+    ? defaultSoftThreshold
+    : defaults.defaultHardThreshold
+  const requestedHardThreshold = boundedPositiveInt(input?.defaultHardThreshold, defaultHardThreshold)
   return {
     defaultSoftThreshold,
     defaultHardThreshold: Math.max(defaultSoftThreshold, requestedHardThreshold),
@@ -639,6 +704,33 @@ function normalizeKunRuntimeTuningSettings(
         16 * 1024 * 1024
       )
     }
+  }
+}
+
+const KUN_DESIGN_QUALITY_STRICTNESS: readonly KunDesignQualityStrictness[] = [
+  'relaxed',
+  'standard',
+  'strict'
+]
+
+function normalizeKunQualitySettings(
+  input: Partial<KunDesignQualitySettingsV1> | undefined
+): KunDesignQualitySettingsV1 {
+  const defaults = defaultKunQualitySettings()
+  const strictness =
+    input?.strictness && KUN_DESIGN_QUALITY_STRICTNESS.includes(input.strictness)
+      ? input.strictness
+      : defaults.strictness
+  const sanitizeList = (list: unknown): string[] =>
+    Array.isArray(list)
+      ? list.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+      : defaults.ignoreRules
+  return {
+    enabled: input?.enabled !== false,
+    strictness,
+    ignoreRules: sanitizeList(input?.ignoreRules),
+    ignoreFiles: sanitizeList(input?.ignoreFiles),
+    maxFindings: boundedPositiveInt(input?.maxFindings, defaults.maxFindings, 100)
   }
 }
 
@@ -934,7 +1026,8 @@ export function migrateLegacyAppSettings(parsed: LegacyAppSettingsShape): Partia
     speechToText: normalizeKunSpeechToTextSettings(explicitKun.speechToText),
     textToSpeech: normalizeKunTextToSpeechSettings(explicitKun.textToSpeech),
     musicGeneration: normalizeKunMusicGenerationSettings(explicitKun.musicGeneration),
-    videoGeneration: normalizeKunVideoGenerationSettings(explicitKun.videoGeneration)
+    videoGeneration: normalizeKunVideoGenerationSettings(explicitKun.videoGeneration),
+    quality: normalizeKunQualitySettings(explicitKun.quality)
   }
   // Strip the legacy `agentProvider` discriminator and the legacy
   // per-provider settings from the surfaced migration result. The

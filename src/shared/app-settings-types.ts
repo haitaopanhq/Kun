@@ -1,6 +1,7 @@
 import type { GuiUpdateChannel } from './gui-update'
 import type { KeyboardShortcutsConfigV1 } from './keyboard-shortcuts'
 import type { ApprovalPolicy, SandboxMode } from '../../kun/src/contracts/policy.js'
+import type { ComputerUseMode } from '../../kun/src/contracts/capabilities.js'
 import type { ModelEndpointFormat } from '../../kun/src/contracts/model-endpoint-format.js'
 export {
   DEFAULT_MODEL_ENDPOINT_FORMAT,
@@ -76,6 +77,12 @@ export const DEFAULT_WRITE_INLINE_LONG_COMPLETION_MAX_TOKENS = 256
 export const DEFAULT_KUN_PORT = 8899
 export const DEFAULT_WEIXIN_BRIDGE_RPC_URL = 'http://127.0.0.1:18790/api/v1/admin/rpc'
 export const DEFAULT_MODEL_PROVIDER_ID = 'deepseek'
+export const NETWORK_PROXY_PROTOCOLS = ['http', 'https', 'socks', 'socks4', 'socks4a', 'socks5', 'socks5h'] as const
+export type NetworkProxyProtocol = (typeof NETWORK_PROXY_PROTOCOLS)[number]
+export type NetworkProxySettingsV1 = {
+  enabled: boolean
+  url: string
+}
 export type { ModelEndpointFormat }
 export const MODEL_PROVIDER_INPUT_MODALITIES = ['text', 'image'] as const
 export type ModelProviderInputModality = (typeof MODEL_PROVIDER_INPUT_MODALITIES)[number]
@@ -150,6 +157,7 @@ export type ModelProviderProfileV1 = {
 export type ModelProviderSettingsV1 = {
   apiKey: string
   baseUrl: string
+  proxy: NetworkProxySettingsV1
   providers: ModelProviderProfileV1[]
 }
 
@@ -168,8 +176,9 @@ export type ModelProviderProfilePatchV1 = Partial<Omit<ModelProviderProfileV1, '
   video?: ModelProviderVideoCapabilityPatchV1 | null
 }
 export type ModelProviderSettingsPatchV1 = Partial<
-  Omit<ModelProviderSettingsV1, 'providers'>
+  Omit<ModelProviderSettingsV1, 'providers' | 'proxy'>
 > & {
+  proxy?: Partial<NetworkProxySettingsV1>
   providers?: ModelProviderProfilePatchV1[]
 }
 
@@ -218,6 +227,40 @@ export type KunRuntimeSettingsV1 = {
   modelProfiles: Record<string, ModelProviderModelProfileV1>
   /** Whether long-term memory is enabled in the Kun runtime. */
   memoryEnabled: boolean
+  /** Host computer-use (screenshot + mouse/keyboard control) settings. */
+  computerUse: KunComputerUseSettingsV1
+  /** First-party design-quality linter applied to frontend output. */
+  quality: KunDesignQualitySettingsV1
+}
+
+/** Detection aggressiveness for the design-quality linter. */
+export type KunDesignQualityStrictness = 'relaxed' | 'standard' | 'strict'
+
+export type KunDesignQualitySettingsV1 = {
+  /** Master switch. Off means the builtin design-quality hook never fires. */
+  enabled: boolean
+  strictness: KunDesignQualityStrictness
+  /** Rule ids to suppress. */
+  ignoreRules: string[]
+  /** Relative-path glob patterns to skip. */
+  ignoreFiles: string[]
+  /** Cap on findings folded into a single tool result. */
+  maxFindings: number
+}
+
+export type KunComputerUseSettingsV1 = {
+  /** Master switch. Off means the computer_use tool is never registered. */
+  enabled: boolean
+  /**
+   * `auto`: advertise only to vision (image-capable) models — a vision
+   * model turns it on for itself. `always`: advertise to every model.
+   * `off`: never advertise even when enabled.
+   */
+  mode: ComputerUseMode
+  /** Longest screenshot edge (px); larger captures are downscaled for grounding. */
+  maxImageDimension: number
+  /** Hard cap on computer_use actions per turn. */
+  maxActionsPerTurn: number
 }
 
 export type KunImageGenerationSettingsV1 = {
@@ -393,7 +436,7 @@ export type KunTokenEconomySettingsPatchV1 = Partial<
 export type KunRuntimeSettingsPatchV1 = Partial<
   Omit<
     KunRuntimeSettingsV1,
-    'mcpSearch' | 'storage' | 'contextCompaction' | 'runtimeTuning' | 'tokenEconomy' | 'imageGeneration' | 'speechToText' | 'textToSpeech' | 'musicGeneration' | 'videoGeneration' | 'modelProfiles'
+    'mcpSearch' | 'storage' | 'contextCompaction' | 'runtimeTuning' | 'tokenEconomy' | 'imageGeneration' | 'speechToText' | 'textToSpeech' | 'musicGeneration' | 'videoGeneration' | 'computerUse' | 'quality' | 'modelProfiles'
   >
 > & {
   mcpSearch?: Partial<KunMcpSearchSettingsV1>
@@ -406,6 +449,8 @@ export type KunRuntimeSettingsPatchV1 = Partial<
   textToSpeech?: Partial<KunTextToSpeechSettingsV1>
   musicGeneration?: Partial<KunMusicGenerationSettingsV1>
   videoGeneration?: Partial<KunVideoGenerationSettingsV1>
+  computerUse?: Partial<KunComputerUseSettingsV1>
+  quality?: Partial<KunDesignQualitySettingsV1>
   modelProfiles?: Record<string, ModelProviderModelProfilePatchV1 | null>
 }
 
@@ -597,6 +642,8 @@ export type ClawImChannelV1 = {
   welcomeSentAt?: string
   createdAt: string
   updatedAt: string
+  /** 当 provider === 'feishu' 时,是否把 agent 回复改为流式输出。默认 false (per-channel)。 */
+  feishuStream?: boolean
 }
 
 export type ClawSettingsV1 = {
@@ -807,6 +854,7 @@ export type AppSettingsV1 = {
   locale: 'en' | 'zh'
   theme: 'system' | 'light' | 'dark'
   uiFontScale: UiFontScale
+  cursorSpotlight?: boolean
   provider: ModelProviderSettingsV1
   agents: KunSettingsEnvelopeV1
   workspaceRoot: string

@@ -110,6 +110,7 @@ export function SidebarCommandRow({
   return (
     <button
       type="button"
+      data-cursor-spotlight-target
       disabled={disabled}
       title={disabled ? disabledHint : undefined}
       onClick={onClick}
@@ -149,16 +150,21 @@ export function SidebarCommandRow({
 
 type SidebarSectionHeaderProps = {
   label: string
+  title?: string
   actions?: ReactNode
 }
 
 export function SidebarSectionHeader({
   label,
+  title,
   actions
 }: SidebarSectionHeaderProps): ReactElement {
   return (
     <div className="flex items-center justify-between px-2.5 pb-2 pt-5">
-      <span className="min-w-0 truncate text-[12px] font-normal text-[#9aa5b5] dark:text-white/35">
+      <span
+        className="min-w-0 truncate text-[12px] font-normal text-[#9aa5b5] dark:text-white/35"
+        title={title}
+      >
         {label}
       </span>
       {actions ? <div className="flex shrink-0 items-center gap-0.5">{actions}</div> : null}
@@ -199,6 +205,7 @@ export function SidebarIconButton({
   return (
     <button
       type="button"
+      data-cursor-spotlight-target
       disabled={disabled}
       onPointerDown={(event) => {
         if (stopPropagation) event.stopPropagation()
@@ -315,6 +322,7 @@ export function SidebarTreeRow({
 
   return (
     <div
+      data-cursor-spotlight-target
       className={cx(
         'group relative flex w-full items-center overflow-hidden rounded-[8px] text-[13px] font-normal transition',
         outlined

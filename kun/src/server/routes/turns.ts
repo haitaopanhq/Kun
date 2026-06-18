@@ -90,7 +90,8 @@ export async function compactTurn(
   try {
     const response = await turns.compact({
       threadId,
-      request: parsed.data
+      request: parsed.data,
+      signal: request.signal
     })
     return jsonResponse(response)
   } catch (error) {

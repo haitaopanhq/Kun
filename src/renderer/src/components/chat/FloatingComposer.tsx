@@ -16,6 +16,7 @@ import {
   FileEdit,
   FileText,
   Folder,
+  GitBranch,
   GitFork,
   ImagePlus,
   ListTodo,
@@ -28,6 +29,7 @@ import {
   Plus,
   PlayCircle,
   RotateCcw,
+  Search,
   SearchCode,
   Send,
   Sparkles,
@@ -58,6 +60,7 @@ import {
 } from '../../lib/workspace-file-index'
 import {
   COMPACT_COMMAND_ALIASES,
+  buildResearchPrompt,
   getGoalPanelDraftObjective,
   getSlashQuery,
   NEW_COMMAND_ALIASES,
@@ -65,12 +68,14 @@ import {
   parseCompactCommand,
   parseGoalCommand,
   parseNewCommand,
+  parseResearchCommand,
   parseReviewCommand,
+  RESEARCH_COMMAND_ALIASES,
   REVIEW_COMMAND_ALIASES,
   type SlashCommand,
   type SlashCommandId
 } from './floating-composer-commands'
-export { parseBtwCommand, parseCompactCommand, parseGoalCommand, parseNewCommand, parseReviewCommand } from './floating-composer-commands'
+export { buildResearchPrompt, parseBtwCommand, parseCompactCommand, parseGoalCommand, parseNewCommand, parseResearchCommand, parseReviewCommand } from './floating-composer-commands'
 import {
   formatCompactNumber,
   formatCost,
@@ -158,6 +163,9 @@ type Props = {
   onInterrupt: (options?: { discard?: boolean }) => void
   onPlanCommand?: () => void
   onNewCommand?: () => void
+  /** Worktree parallel mode toggle (single-use per new conversation). */
+  useWorktreePool?: boolean
+  onToggleWorktreeMode?: () => void
   onReviewCommand?: (target: ReviewTarget) => void
   onExecutionSettingsChange?: (patch: Partial<ComposerExecutionSettings>) => void
   onOpenChanges?: () => void
@@ -461,6 +469,8 @@ export function FloatingComposer({
   onInterrupt,
   onPlanCommand,
   onNewCommand,
+  useWorktreePool = false,
+  onToggleWorktreeMode,
   onReviewCommand,
   onExecutionSettingsChange,
   onOpenChanges,
@@ -564,8 +574,9 @@ export function FloatingComposer({
   const canCreateNewThread = runtimeReady && route !== 'claw' && Boolean(effectiveWorkspaceRoot) && Boolean(onNewCommand)
   const canOpenGoalPanel = canCompose && route !== 'claw'
   const canRunReview = canCompose && route !== 'claw' && Boolean(onReviewCommand)
+  const canToggleWorktreeMode = canCompose && route !== 'claw' && Boolean(onToggleWorktreeMode)
   const canOpenComposerMenu = showComposerMenuButton
-    && (canTogglePlanMode || canCreateNewThread || canOpenGoalPanel || canRunReview)
+    && (canTogglePlanMode || canCreateNewThread || canOpenGoalPanel || canRunReview || canToggleWorktreeMode)
   const showToolbarStartControls = showComposerMenuButton
   const showChangeSummary = !compact && route === 'chat' && changedFiles.length > 0
   const effectiveChangedFileStats = changedFileStats ?? changedFiles.reduce(
@@ -629,22 +640,37 @@ export function FloatingComposer({
   const measuredTotalRef = useRef<number | null>(null)
   if (!busy) measuredTotalRef.current = liveMeasuredTotal
   const measuredContextTotal = busy ? measuredTotalRef.current : liveMeasuredTotal
-  // The message estimate only feeds the per-category split (popover) or the
-  // no-measured-total fallback. Never subscribe to `blocks` while streaming with
-  // the popover closed — blocks churn on every delta and re-render the whole
-  // composer. Freeze the last estimate in a ref instead.
+  // The message estimate feeds the per-category split (popover), the
+  // no-measured-total fallback, AND the sanity check that rejects an inflated
+  // measured total (some providers over-report prompt_tokens — see
+  // buildContextCapacity). We therefore need it whenever the gauge is idle, not
+  // just when the popover is open. Never subscribe to `blocks` while streaming
+  // with the popover closed — blocks churn on every delta and re-render the
+  // whole composer; the frozen ref is good enough for that transient window.
   const needMessageEstimate =
-    canShowContextCapacity && (contextCapacityOpen || measuredContextTotal == null)
+    canShowContextCapacity && (contextCapacityOpen || measuredContextTotal == null || !busy)
   const subscribeContextBlocks = needMessageEstimate && (contextCapacityOpen || !busy)
   const contextBlocks = useChatStore((s) => (subscribeContextBlocks ? s.blocks : EMPTY_CONTEXT_BLOCKS))
   const conversationTokensRef = useRef(0)
   const conversationTokens = useMemo(() => {
     if (!subscribeContextBlocks) return conversationTokensRef.current
+    // Only the slice from the most recent compaction onward is actually re-sent
+    // to the model — the runtime folds everything before the latest compaction
+    // summary into it (effective history after the latest compaction). Counting the full
+    // visible history would over-state usage and hide the effect of compaction.
+    let startIndex = 0
+    for (let i = contextBlocks.length - 1; i >= 0; i -= 1) {
+      if (contextBlocks[i]?.kind === 'compaction') {
+        startIndex = i
+        break
+      }
+    }
     // Cache per block: block identity is preserved for unchanged history across
     // streaming updates, so only the block that changed is re-estimated.
     const cache = messageTokenCacheRef.current
     let sum = 0
-    for (const block of contextBlocks) {
+    for (let i = startIndex; i < contextBlocks.length; i += 1) {
+      const block = contextBlocks[i]!
       let cached = cache.get(block)
       if (cached === undefined) {
         cached = estimateBlockTokens(block)
@@ -699,7 +725,9 @@ export function FloatingComposer({
           ? clawHasInboundConversation
             ? t('clawComposerHint')
             : t('clawComposerHintNeedsInbound')
-          : t('composerSlashHint')
+          : useWorktreePool
+            ? t('composerWorktreeModeHint')
+            : t('composerSlashHint')
   const slashCommands = useMemo<SlashCommand[]>(() => {
     const threadActionDisabled = !runtimeReady || busy || !activeThreadId
     const goalActionDisabled = !canOpenGoalPanel
@@ -713,6 +741,14 @@ export function FloatingComposer({
         keywords: ['create', 'new', 'thread', 'chat', '会话', '新建', ...NEW_COMMAND_ALIASES],
         icon: <Plus className="h-4 w-4" strokeWidth={1.9} />,
         disabled: !canCreateNewThread
+      })
+      commands.push({
+        id: 'research',
+        title: t('slashCommandResearchTitle'),
+        description: t('slashCommandResearchDescription'),
+        keywords: ['research', 'deep', 'web', 'sources', 'papers', 'evidence', ...RESEARCH_COMMAND_ALIASES],
+        icon: <Search className="h-4 w-4" strokeWidth={1.9} />,
+        disabled: !runtimeReady
       })
     }
     if (onPlanCommand) {
@@ -1080,6 +1116,12 @@ export function FloatingComposer({
       draft.focusComposer()
       return
     }
+    if (commandId === 'research') {
+      setMode('agent')
+      setInput(buildResearchPrompt(t('slashCommandResearchPrompt'), null))
+      draft.focusComposer()
+      return
+    }
     if (commandId === 'review' && onReviewCommand) {
       setInput('')
       void onReviewCommand({ kind: 'uncommittedChanges' })
@@ -1189,6 +1231,13 @@ export function FloatingComposer({
     draft.focusComposer()
   }
 
+  const handleWorktreeToolbarClick = (): void => {
+    if (!onToggleWorktreeMode) return
+    setComposerMenuOpen(false)
+    onToggleWorktreeMode()
+    draft.focusComposer()
+  }
+
   const syncComposerCursor = (element = draft.textareaRef.current): void => {
     if (!element) return
     setComposerCursor(element.selectionStart ?? input.length)
@@ -1249,6 +1298,15 @@ export function FloatingComposer({
       if (command?.disabled) return
       setInput('')
       void compactActiveThread(compactCommand.reason)
+      draft.focusComposer()
+      return
+    }
+    const researchTopic = parseResearchCommand(input)
+    if (researchTopic !== false) {
+      const command = slashCommands.find((item) => item.id === 'research')
+      if (command?.disabled) return
+      setMode('agent')
+      setInput(buildResearchPrompt(t('slashCommandResearchPrompt'), researchTopic))
       draft.focusComposer()
       return
     }
@@ -1587,6 +1645,32 @@ export function FloatingComposer({
                 />
               </span>
             </button>
+            {canToggleWorktreeMode ? (
+              <button
+                type="button"
+                disabled={!canToggleWorktreeMode}
+                onClick={handleWorktreeToolbarClick}
+                className="ds-no-drag flex h-8 w-full items-center gap-2 px-3 text-left transition hover:bg-ds-hover hover:text-ds-ink disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent disabled:hover:text-ds-muted"
+              >
+                <GitBranch className="h-3.5 w-3.5 shrink-0" strokeWidth={1.9} />
+                <span className="min-w-0 flex-1 truncate">{t('composerMenuWorktreeMode')}</span>
+                <span
+                  role="switch"
+                  aria-checked={useWorktreePool}
+                  className={`relative h-5 w-9 shrink-0 rounded-full ring-1 transition ${
+                    useWorktreePool
+                      ? 'bg-accent ring-accent/35 shadow-[inset_0_1px_0_rgba(255,255,255,0.24)]'
+                      : 'bg-ds-border-muted ring-ds-border-muted'
+                  }`}
+                >
+                  <span
+                    className={`absolute top-0.5 h-4 w-4 rounded-full bg-white ring-1 ring-black/5 transition ${
+                      useWorktreePool ? 'translate-x-[17px]' : 'translate-x-0.5'
+                    } shadow-[0_1px_4px_rgba(20,47,95,0.28)]`}
+                  />
+                </span>
+              </button>
+            ) : null}
           </div>
         ) : null}
 

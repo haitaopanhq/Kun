@@ -253,13 +253,21 @@ const modelProfilePatchSchema = z.object({
 const modelProviderPatchSchema = z.object({
   apiKey: z.string().max(MAX_BODY_BYTES).optional(),
   baseUrl: z.string().trim().max(MAX_URL_LENGTH).optional(),
+  proxy: z.object({
+    enabled: z.boolean().optional(),
+    url: z.string().trim().max(MAX_URL_LENGTH).optional()
+  }).strict().optional(),
   providers: z.array(z.object({
     id: z.string().trim().min(1).max(64).optional(),
     name: z.string().trim().min(1).max(80).optional(),
     apiKey: z.string().max(MAX_BODY_BYTES).optional(),
     baseUrl: z.string().trim().max(MAX_URL_LENGTH).optional(),
     endpointFormat: modelEndpointFormatSchema.optional(),
-    models: z.array(z.string().trim().min(1).max(128)).max(200).optional(),
+    // Some third-party aggregators (litellm, oneapi, …) advertise 500+ chat
+    // models in a single /v1/models response. The previous 200/50 caps caused
+    // settings:set to silently fail with no toast (#397). Raised to leave
+    // plenty of headroom while still bounding pathological payloads.
+    models: z.array(z.string().trim().min(1).max(128)).max(2000).optional(),
     // 兼容旧版保存的视觉识别能力字段。当前能力已经迁移到 modelProfiles 的 inputModalities/messageParts。
     imageRecognition: z.unknown().optional(),
     modelProfiles: z.record(
@@ -269,27 +277,27 @@ const modelProviderPatchSchema = z.object({
     image: z.object({
       protocol: imageGenerationProtocolSchema.optional(),
       baseUrl: z.string().trim().max(MAX_URL_LENGTH).optional(),
-      models: z.array(z.string().trim().min(1).max(128)).max(50).optional()
+      models: z.array(z.string().trim().min(1).max(128)).max(500).optional()
     }).strict().nullable().optional(),
     speech: z.object({
       protocol: speechToTextProtocolSchema.optional(),
       baseUrl: z.string().trim().max(MAX_URL_LENGTH).optional(),
-      models: z.array(z.string().trim().min(1).max(128)).max(50).optional()
+      models: z.array(z.string().trim().min(1).max(128)).max(500).optional()
     }).strict().nullable().optional(),
     textToSpeech: z.object({
       protocol: textToSpeechProtocolSchema.optional(),
       baseUrl: z.string().trim().max(MAX_URL_LENGTH).optional(),
-      models: z.array(z.string().trim().min(1).max(128)).max(50).optional()
+      models: z.array(z.string().trim().min(1).max(128)).max(500).optional()
     }).strict().nullable().optional(),
     music: z.object({
       protocol: musicGenerationProtocolSchema.optional(),
       baseUrl: z.string().trim().max(MAX_URL_LENGTH).optional(),
-      models: z.array(z.string().trim().min(1).max(128)).max(50).optional()
+      models: z.array(z.string().trim().min(1).max(128)).max(500).optional()
     }).strict().nullable().optional(),
     video: z.object({
       protocol: videoGenerationProtocolSchema.optional(),
       baseUrl: z.string().trim().max(MAX_URL_LENGTH).optional(),
-      models: z.array(z.string().trim().min(1).max(128)).max(50).optional()
+      models: z.array(z.string().trim().min(1).max(128)).max(500).optional()
     }).strict().nullable().optional()
   }).strict()).max(50).optional()
 }).strict()
@@ -354,6 +362,13 @@ const kunRuntimePatchSchema = z.object({
       maxStringBytes: z.number().int().positive().max(16 * 1024 * 1024).optional()
     }).strict().optional()
   }).strict().optional(),
+  quality: z.object({
+    enabled: z.boolean().optional(),
+    strictness: z.enum(['relaxed', 'standard', 'strict']).optional(),
+    ignoreRules: z.array(z.string().trim().min(1).max(128)).max(200).optional(),
+    ignoreFiles: z.array(z.string().trim().min(1).max(256)).max(200).optional(),
+    maxFindings: z.number().int().positive().max(100).optional()
+  }).strict().optional(),
   imageGeneration: z.object({
     enabled: z.boolean().optional(),
     providerId: z.string().trim().max(64).optional(),
@@ -406,6 +421,12 @@ const kunRuntimePatchSchema = z.object({
     defaultResolution: z.string().trim().max(32).optional(),
     timeoutMs: z.number().int().positive().max(3_600_000).optional(),
     pollIntervalMs: z.number().int().positive().max(120_000).optional()
+  }).strict().optional(),
+  computerUse: z.object({
+    enabled: z.boolean().optional(),
+    mode: z.enum(['auto', 'always', 'off']).optional(),
+    maxImageDimension: z.number().int().positive().max(4096).optional(),
+    maxActionsPerTurn: z.number().int().positive().max(1000).optional()
   }).strict().optional(),
   // 兼容旧版保存的独立视觉识别设置。当前能力已经迁移到 provider modelProfiles。
   imageRecognition: z.unknown().optional(),
@@ -584,7 +605,8 @@ const clawImChannelPatchSchema = z.object({
   conversations: z.array(clawImConversationPatchSchema).max(512).optional(),
   welcomeSentAt: z.string().max(128).optional(),
   createdAt: z.string().max(128).optional(),
-  updatedAt: z.string().max(128).optional()
+  updatedAt: z.string().max(128).optional(),
+  feishuStream: z.boolean().optional()
 }).strict()
 
 const clawTaskSchedulePatchSchema = z.object({
@@ -682,7 +704,6 @@ function stripLegacySettingsPatchKeys(payload: unknown): unknown {
 
   delete next.agentProvider
   delete next.deepseek
-  delete next.disabledSkillIds
   delete next.reasonix
   delete next.quickChat
 
@@ -702,6 +723,7 @@ const settingsPatchObjectSchema = z.object({
   locale: localeSchema.optional(),
   theme: themeSchema.optional(),
   uiFontScale: uiFontScaleSchema.optional(),
+  cursorSpotlight: z.boolean().optional(),
   provider: modelProviderPatchSchema.optional(),
   agents: z.object({
     kun: kunRuntimePatchSchema.optional()
@@ -1047,6 +1069,8 @@ export const notificationPayloadSchema = z
 export const guiUpdateChannelSchema = z.enum(GUI_UPDATE_CHANNELS).optional()
 
 export const desktopCommandSchema = z.enum(DESKTOP_COMMANDS)
+
+export const computerUsePermissionKindSchema = z.enum(['accessibility', 'screenRecording'])
 
 
 export const logErrorPayloadSchema = z

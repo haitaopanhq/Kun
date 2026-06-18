@@ -63,6 +63,12 @@ export type ServerRuntime = {
   attachmentStore?: AttachmentStore
   memoryStore?: MemoryStore
   runTurn(threadId: string, turnId: string): Promise<'completed' | 'failed' | 'aborted'> | void
+  /**
+   * Relaunch goal continuation turns for threads whose in-flight turn was
+   * just reconciled to `failed` after a runtime restart. Returns the number
+   * of goals resumed. Optional so embedders without the agent loop can omit it.
+   */
+  resumeInterruptedGoals?(threadIds: readonly string[]): Promise<number>
   runReview?(input: {
     threadId: string
     turnId: string
