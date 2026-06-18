@@ -23,16 +23,18 @@ export function ModelPicker({ providers, providerId, model, onChange }: Props): 
   const triggerRef = useRef<HTMLButtonElement>(null)
 
   const provider = providers.find((item) => item.id === providerId)
-  const models = useMemo(() => {
-    const list = provider ? provider.models : Array.from(new Set(providers.flatMap((item) => item.models)))
-    return list.filter(Boolean)
-  }, [provider, providers])
+  const providerChosen = providerId.trim().length > 0
+  // A model is only meaningful within a provider — never pool every provider's
+  // models together, otherwise the combobox lets you pick a model with no
+  // provider selected (the runtime would then have to guess the provider).
+  const models = useMemo(() => (provider ? provider.models.filter(Boolean) : []), [provider])
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
     return (q ? models.filter((item) => item.toLowerCase().includes(q)) : models).slice(0, 200)
   }, [models, query])
 
   const openPanel = (): void => {
+    if (!providerChosen) return
     if (triggerRef.current) setRect(triggerRef.current.getBoundingClientRect())
     setQuery('')
     setOpen(true)
@@ -67,10 +69,13 @@ export function ModelPicker({ providers, providerId, model, onChange }: Props): 
         <button
           ref={triggerRef}
           type="button"
-          className={`${FIELD_CLASS} flex items-center justify-between gap-2 text-left`}
+          disabled={!providerChosen}
+          className={`${FIELD_CLASS} flex items-center justify-between gap-2 text-left disabled:cursor-not-allowed disabled:opacity-60`}
           onClick={() => (open ? setOpen(false) : openPanel())}
         >
-          <span className={`truncate ${model ? 'text-ds-ink' : 'text-ds-faint'}`}>{model || 'auto'}</span>
+          <span className={`truncate ${providerChosen && model ? 'text-ds-ink' : 'text-ds-faint'}`}>
+            {providerChosen ? model || 'auto' : t('workflowModelPickProviderFirst')}
+          </span>
           <ChevronDown className="h-3.5 w-3.5 shrink-0 text-ds-faint" strokeWidth={1.8} />
         </button>
       </label>
