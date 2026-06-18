@@ -6,6 +6,7 @@ import {
   mergeWorkflowSettings,
   normalizeWorkflowSettings,
   type AppSettingsV1,
+  type WorkflowCustomModuleV1,
   type WorkflowNodePresetV1,
   type WorkflowNodeRunResultV1,
   type WorkflowNodeV1,
@@ -26,6 +27,7 @@ type Props = {
 
 const EMPTY_WORKFLOWS: WorkflowV1[] = []
 const EMPTY_PRESETS: WorkflowNodePresetV1[] = []
+const EMPTY_MODULES: WorkflowCustomModuleV1[] = []
 
 function statusTone(status: WorkflowV1['lastStatus']): string {
   if (status === 'running') return 'bg-amber-500/15 text-amber-900 dark:text-amber-100'
@@ -84,6 +86,7 @@ export function WorkflowView({ leftSidebarCollapsed, onToggleLeftSidebar }: Prop
   const workflowSettings = settings ? normalizeWorkflowSettings(settings.workflow) : null
   const workflows = workflowSettings?.workflows ?? EMPTY_WORKFLOWS
   const presets = workflowSettings?.presets ?? EMPTY_PRESETS
+  const modules = workflowSettings?.modules ?? EMPTY_MODULES
   const runningIds = useMemo(() => new Set(status?.runningWorkflowIds ?? []), [status])
 
   const persistPresets = useCallback(
@@ -105,6 +108,17 @@ export function WorkflowView({ leftSidebarCollapsed, onToggleLeftSidebar }: Prop
   const handleDeletePreset = useCallback(
     (presetId: string): Promise<void> => persistPresets(presets.filter((preset) => preset.id !== presetId)),
     [persistPresets, presets]
+  )
+
+  const handleSaveModules = useCallback(
+    async (nextModules: WorkflowCustomModuleV1[]): Promise<void> => {
+      if (!settings) return
+      const nextWorkflow = mergeWorkflowSettings(settings.workflow, { modules: nextModules })
+      setSettings({ ...settings, workflow: nextWorkflow })
+      const saved = await rendererRuntimeClient.setSettings({ workflow: nextWorkflow })
+      setSettings(saved)
+    },
+    [settings]
   )
 
   const persist = useCallback(
@@ -224,6 +238,8 @@ export function WorkflowView({ leftSidebarCollapsed, onToggleLeftSidebar }: Prop
         presets={presets}
         onSavePreset={handleSavePreset}
         onDeletePreset={handleDeletePreset}
+        modules={modules}
+        onSaveModules={handleSaveModules}
       />
     )
   }

@@ -775,6 +775,13 @@ const workflowDelayConfigSchema = z
   .object({ delayMs: z.number().int().min(0).max(86_400_000).optional() })
   .strict()
 
+const workflowCustomConfigSchema = z
+  .object({
+    moduleId: z.string().max(MAX_ID_LENGTH).optional(),
+    values: z.record(z.string().max(MAX_BODY_BYTES)).optional()
+  })
+  .strict()
+
 const workflowFieldSchema = z
   .object({ key: z.string().max(256), value: z.string().max(MAX_BODY_BYTES) })
   .strict()
@@ -900,7 +907,8 @@ const workflowNodePatchSchema = z.discriminatedUnion('type', [
   z.object({ ...workflowNodeBaseShape, type: z.literal('merge'), config: workflowMergeConfigSchema.optional() }).strict(),
   z.object({ ...workflowNodeBaseShape, type: z.literal('subworkflow'), config: workflowSubWorkflowConfigSchema.optional() }).strict(),
   z.object({ ...workflowNodeBaseShape, type: z.literal('loop'), config: workflowLoopConfigSchema.optional() }).strict(),
-  z.object({ ...workflowNodeBaseShape, type: z.literal('delay'), config: workflowDelayConfigSchema.optional() }).strict()
+  z.object({ ...workflowNodeBaseShape, type: z.literal('delay'), config: workflowDelayConfigSchema.optional() }).strict(),
+  z.object({ ...workflowNodeBaseShape, type: z.literal('custom'), config: workflowCustomConfigSchema.optional() }).strict()
 ])
 
 const workflowConnectionPatchSchema = z
@@ -955,6 +963,29 @@ const workflowPatchSchema = z
   })
   .strict()
 
+const workflowModuleFieldSchema = z
+  .object({
+    key: z.string().max(128),
+    label: z.string().max(200).optional(),
+    type: z.enum(['text', 'textarea', 'number', 'boolean', 'select']).optional(),
+    defaultValue: z.string().max(MAX_BODY_BYTES).optional(),
+    options: z.array(z.string().max(200)).max(50).optional(),
+    placeholder: z.string().max(200).optional()
+  })
+  .strict()
+
+const workflowCustomModuleSchema = z
+  .object({
+    id: z.string().max(MAX_ID_LENGTH),
+    name: z.string().max(200).optional(),
+    description: z.string().max(2_000).optional(),
+    icon: z.string().max(64).optional(),
+    language: z.enum(['javascript', 'python', 'bash']).optional(),
+    fields: z.array(workflowModuleFieldSchema).max(50).optional(),
+    code: z.string().max(MAX_BODY_BYTES).optional()
+  })
+  .strict()
+
 // Lenient: nodeType / config are re-validated per kind by normalizeNodePreset.
 const workflowNodePresetSchema = z
   .object({
@@ -978,7 +1009,8 @@ const workflowSettingsPatchSchema = z
     webhookPort: z.number().int().min(1024).max(65_535).optional(),
     webhookSecret: z.string().max(MAX_BODY_BYTES).optional(),
     workflows: z.array(workflowPatchSchema).max(200).optional(),
-    presets: z.array(workflowNodePresetSchema).max(100).optional()
+    presets: z.array(workflowNodePresetSchema).max(100).optional(),
+    modules: z.array(workflowCustomModuleSchema).max(100).optional()
   })
   .strict()
 

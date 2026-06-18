@@ -4,6 +4,7 @@ import { Handle, NodeToolbar, Position, type NodeProps, type NodeTypes } from '@
 import { useTranslation } from 'react-i18next'
 import {
   ArrowDownUp,
+  Blocks,
   Braces,
   Brain,
   CalendarClock,
@@ -63,7 +64,8 @@ export const NODE_ICONS: Record<WorkflowNodeKind, LucideIcon> = {
   merge: GitMerge,
   subworkflow: Workflow,
   loop: Repeat,
-  delay: Timer
+  delay: Timer,
+  custom: Blocks
 }
 
 function statusDotClass(status: WorkflowNodeRunStatus | undefined): string {

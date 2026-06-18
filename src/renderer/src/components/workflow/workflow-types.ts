@@ -2,6 +2,7 @@ import type { Edge, Node } from '@xyflow/react'
 import { MarkerType } from '@xyflow/react'
 import type {
   WorkflowConnectionV1,
+  WorkflowCustomModuleV1,
   WorkflowNodeKind,
   WorkflowNodePresetV1,
   WorkflowNodeRunStatus,
@@ -143,8 +144,27 @@ export function createWorkflowNode(
       }
     case 'delay':
       return { ...base, type: 'delay', config: { delayMs: 1_000 } }
+    case 'custom':
+      return { ...base, type: 'custom', config: { moduleId: '', values: {} } }
     default:
       return { ...base, type: 'manual-trigger', config: {} }
+  }
+}
+
+/** Build a `custom` node bound to a module, pre-filled with the module's field defaults. */
+export function createCustomNode(
+  module: WorkflowCustomModuleV1,
+  position: { x: number; y: number }
+): WorkflowNodeV1 {
+  const values: Record<string, string> = {}
+  for (const field of module.fields) values[field.key] = field.defaultValue
+  return {
+    id: uid('node'),
+    type: 'custom',
+    name: module.name,
+    position,
+    disabled: false,
+    config: { moduleId: module.id, values }
   }
 }
 
@@ -173,6 +193,23 @@ export function presetFromNode(id: string, label: string, node: WorkflowNodeV1):
 
 export function presetUid(): string {
   return uid('preset')
+}
+
+export function moduleUid(): string {
+  return uid('module')
+}
+
+/** A blank custom module with a starter script. */
+export function createCustomModule(name: string): WorkflowCustomModuleV1 {
+  return {
+    id: uid('module'),
+    name,
+    description: '',
+    icon: '',
+    language: 'javascript',
+    fields: [],
+    code: 'return { ok: true }'
+  }
 }
 
 export function createWorkflow(name: string): WorkflowV1 {

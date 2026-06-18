@@ -62,6 +62,81 @@ function Field({ label, children }: { label: string; children: ReactNode }): Rea
   )
 }
 
+type CustomNode = Extract<WorkflowNodeV1, { type: 'custom' }>
+
+/** Auto-generated form for a `custom` node, built from its module's field schema. */
+function CustomNodeForm({
+  node,
+  settings,
+  onChange
+}: {
+  node: CustomNode
+  settings: AppSettingsV1
+  onChange: (node: WorkflowNodeV1) => void
+}): ReactElement {
+  const { t } = useTranslation('common')
+  const module = settings.workflow.modules.find((item) => item.id === node.config.moduleId)
+  if (!module) {
+    return <p className="text-[12px] leading-5 text-red-600">{t('workflowModuleMissing')}</p>
+  }
+  const setValue = (key: string, value: string): void =>
+    onChange({ ...node, config: { ...node.config, values: { ...node.config.values, [key]: value } } })
+  return (
+    <>
+      {module.description ? (
+        <p className="text-[11.5px] leading-5 text-ds-faint">{module.description}</p>
+      ) : null}
+      {module.fields.length === 0 ? (
+        <p className="text-[11.5px] leading-5 text-ds-faint">{t('workflowModuleNoFields')}</p>
+      ) : null}
+      {module.fields.map((field) => {
+        const value = node.config.values[field.key] ?? field.defaultValue
+        if (field.type === 'boolean') {
+          return (
+            <label key={field.key} className="flex items-center gap-2 text-[13px] text-ds-ink">
+              <input
+                type="checkbox"
+                checked={value === 'true'}
+                onChange={(event) => setValue(field.key, event.target.checked ? 'true' : 'false')}
+              />
+              {field.label || field.key}
+            </label>
+          )
+        }
+        return (
+          <Field key={field.key} label={field.label || field.key}>
+            {field.type === 'textarea' ? (
+              <textarea
+                className={`${INPUT_CLASS} min-h-[80px] resize-y`}
+                value={value}
+                placeholder={field.placeholder}
+                onChange={(event) => setValue(field.key, event.target.value)}
+              />
+            ) : field.type === 'select' ? (
+              <select className={INPUT_CLASS} value={value} onChange={(event) => setValue(field.key, event.target.value)}>
+                {!field.options.includes(value) ? <option value={value}>{value || '—'}</option> : null}
+                {field.options.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input
+                type={field.type === 'number' ? 'number' : 'text'}
+                className={INPUT_CLASS}
+                value={value}
+                placeholder={field.placeholder}
+                onChange={(event) => setValue(field.key, event.target.value)}
+              />
+            )}
+          </Field>
+        )
+      })}
+    </>
+  )
+}
+
 export function NodeConfigPanel({
   node,
   settings,
@@ -980,6 +1055,8 @@ export function NodeConfigPanel({
             />
           </Field>
         ) : null}
+
+        {node.type === 'custom' ? <CustomNodeForm node={node} settings={settings} onChange={onChange} /> : null}
 
         <label className="mt-2 flex items-center gap-2 text-[13px] text-ds-muted">
           <input

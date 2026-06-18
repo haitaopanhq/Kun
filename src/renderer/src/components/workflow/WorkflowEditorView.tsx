@@ -18,9 +18,10 @@ import {
   type OnConnectEnd,
   type OnConnectStart
 } from '@xyflow/react'
-import { ArrowLeft, ChevronRight, MousePointerClick, Play, Plus, Save, Square, X } from 'lucide-react'
+import { ArrowLeft, ChevronRight, MousePointerClick, Play, Plus, Save, Settings2, Square, X } from 'lucide-react'
 import type {
   AppSettingsV1,
+  WorkflowCustomModuleV1,
   WorkflowNodeKind,
   WorkflowNodePresetV1,
   WorkflowNodeRunResultV1,
@@ -36,10 +37,12 @@ import {
   type WorkflowNodeActions
 } from './WorkflowNodes'
 import { NodeConfigPanel } from './NodeConfigPanel'
+import { ModuleManager } from './ModuleManager'
 import {
   TRIGGER_KINDS,
   WORKFLOW_PALETTE,
   WORKFLOW_PALETTE_GROUPS,
+  createCustomNode,
   createNodeFromPreset,
   createWorkflowNode,
   flowToWorkflowGraph,
@@ -61,6 +64,7 @@ type ConnectMenuState = {
 
 const DND_MIME = 'application/x-workflow-node'
 const PRESET_DND_MIME = 'application/x-workflow-preset'
+const MODULE_DND_MIME = 'application/x-workflow-module'
 
 type WorkflowConnectionsArg = ReturnType<typeof flowToWorkflowGraph>['connections']
 
@@ -83,6 +87,8 @@ type Props = {
   presets: WorkflowNodePresetV1[]
   onSavePreset: (preset: WorkflowNodePresetV1) => void | Promise<void>
   onDeletePreset: (presetId: string) => void | Promise<void>
+  modules: WorkflowCustomModuleV1[]
+  onSaveModules: (modules: WorkflowCustomModuleV1[]) => void | Promise<void>
 }
 
 function WorkflowEditorInner({
@@ -98,7 +104,9 @@ function WorkflowEditorInner({
   onBack,
   presets,
   onSavePreset,
-  onDeletePreset
+  onDeletePreset,
+  modules,
+  onSaveModules
 }: Props): ReactElement {
   const { t } = useTranslation('common')
   const { screenToFlowPosition } = useReactFlow()
@@ -111,6 +119,7 @@ function WorkflowEditorInner({
   const [saving, setSaving] = useState(false)
   const [connectMenu, setConnectMenu] = useState<ConnectMenuState | null>(null)
   const [collapsedGroups, setCollapsedGroups] = useState<ReadonlySet<string>>(() => new Set())
+  const [showModules, setShowModules] = useState(false)
   const connectingRef = useRef<{ nodeId: string; handleId: string } | null>(null)
 
   const toggleGroup = useCallback((groupId: string): void => {
@@ -224,6 +233,26 @@ function WorkflowEditorInner({
     event.dataTransfer.effectAllowed = 'move'
   }, [])
 
+  const insertModuleNode = useCallback((module: WorkflowCustomModuleV1, position: { x: number; y: number }) => {
+    const node = createCustomNode(module, position)
+    setRfNodes((nodes) => [...nodes, { id: node.id, type: node.type, position: node.position, data: { node } }])
+    setSelectedNodeId(node.id)
+    setDirty(true)
+  }, [])
+
+  const addModuleNode = useCallback(
+    (module: WorkflowCustomModuleV1) => {
+      const offset = rfNodes.length * 28
+      insertModuleNode(module, { x: 360 + (offset % 180), y: 140 + offset })
+    },
+    [insertModuleNode, rfNodes.length]
+  )
+
+  const onModuleDragStart = useCallback((event: DragEvent, moduleId: string) => {
+    event.dataTransfer.setData(MODULE_DND_MIME, moduleId)
+    event.dataTransfer.effectAllowed = 'move'
+  }, [])
+
   const handleSavePreset = useCallback(
     (node: WorkflowNodeV1, label: string) => {
       void onSavePreset(presetFromNode(presetUid(), label, node))
@@ -258,11 +287,17 @@ function WorkflowEditorInner({
         if (preset) insertPresetNode(preset, screenToFlowPosition({ x: event.clientX, y: event.clientY }))
         return
       }
+      const moduleId = event.dataTransfer.getData(MODULE_DND_MIME)
+      if (moduleId) {
+        const module = modules.find((item) => item.id === moduleId)
+        if (module) insertModuleNode(module, screenToFlowPosition({ x: event.clientX, y: event.clientY }))
+        return
+      }
       const kind = event.dataTransfer.getData(DND_MIME) as WorkflowNodeKind
       if (!kind || !WORKFLOW_PALETTE.includes(kind)) return
       insertNode(kind, screenToFlowPosition({ x: event.clientX, y: event.clientY }))
     },
-    [insertNode, insertPresetNode, presets, screenToFlowPosition]
+    [insertModuleNode, insertNode, insertPresetNode, modules, presets, screenToFlowPosition]
   )
 
   const handleNodeChange = useCallback((updated: WorkflowNodeV1) => {
@@ -439,22 +474,51 @@ function WorkflowEditorInner({
           })}
 
           <div className="flex flex-col">
-            <button
-              type="button"
-              onClick={() => toggleGroup('custom')}
-              className="flex items-center gap-1 px-2 py-1 text-[10.5px] font-semibold uppercase tracking-wide text-ds-faint transition hover:text-ds-muted"
-            >
-              <ChevronRight
-                className={`h-3 w-3 shrink-0 transition-transform ${collapsedGroups.has('custom') ? '' : 'rotate-90'}`}
-                strokeWidth={2}
-              />
-              <span className="min-w-0 flex-1 truncate text-left">{t('workflowGroup_custom')}</span>
-            </button>
+            <div className="flex items-center gap-1 pr-1">
+              <button
+                type="button"
+                onClick={() => toggleGroup('custom')}
+                className="flex min-w-0 flex-1 items-center gap-1 px-2 py-1 text-[10.5px] font-semibold uppercase tracking-wide text-ds-faint transition hover:text-ds-muted"
+              >
+                <ChevronRight
+                  className={`h-3 w-3 shrink-0 transition-transform ${collapsedGroups.has('custom') ? '' : 'rotate-90'}`}
+                  strokeWidth={2}
+                />
+                <span className="min-w-0 flex-1 truncate text-left">{t('workflowGroup_custom')}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowModules(true)}
+                title={t('workflowModulesManage')}
+                aria-label={t('workflowModulesManage')}
+                className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-ds-faint transition hover:bg-ds-hover hover:text-ds-ink"
+              >
+                <Settings2 className="h-3.5 w-3.5" strokeWidth={1.8} />
+              </button>
+            </div>
             {!collapsedGroups.has('custom') ? (
-              presets.length === 0 ? (
-                <p className="px-2 py-1 text-[11px] leading-4 text-ds-faint">{t('workflowPresetEmpty')}</p>
-              ) : (
-                presets.map((preset) => {
+              <>
+                {modules.map((module) => {
+                  const Icon = NODE_ICONS.custom
+                  return (
+                    <button
+                      key={module.id}
+                      type="button"
+                      draggable
+                      onDragStart={(event) => onModuleDragStart(event, module.id)}
+                      onClick={() => addModuleNode(module)}
+                      title={module.description || module.name}
+                      className="flex cursor-grab items-center gap-2 rounded-lg border border-transparent px-2 py-1.5 text-left text-[12.5px] text-ds-ink transition hover:border-ds-border hover:bg-ds-hover active:cursor-grabbing"
+                    >
+                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-accent/10 text-accent">
+                        <Icon className="h-3.5 w-3.5" strokeWidth={1.9} />
+                      </span>
+                      <span className="min-w-0 flex-1 truncate">{module.name}</span>
+                      <Plus className="h-3.5 w-3.5 shrink-0 text-ds-faint" strokeWidth={1.8} />
+                    </button>
+                  )
+                })}
+                {presets.map((preset) => {
                   const Icon = NODE_ICONS[preset.nodeType]
                   return (
                     <div key={preset.id} className="group/preset relative flex items-center">
@@ -481,8 +545,11 @@ function WorkflowEditorInner({
                       </button>
                     </div>
                   )
-                })
-              )
+                })}
+                {modules.length === 0 && presets.length === 0 ? (
+                  <p className="px-2 py-1 text-[11px] leading-4 text-ds-faint">{t('workflowPresetEmpty')}</p>
+                ) : null}
+              </>
             ) : null}
           </div>
         </aside>
@@ -567,6 +634,14 @@ function WorkflowEditorInner({
           />
         </aside>
       </div>
+
+      {showModules ? (
+        <ModuleManager
+          modules={modules}
+          onChange={(next) => void onSaveModules(next)}
+          onClose={() => setShowModules(false)}
+        />
+      ) : null}
     </div>
   )
 }

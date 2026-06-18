@@ -1,10 +1,14 @@
 import {
+  WORKFLOW_MODULE_FIELD_TYPES,
   WORKFLOW_NODE_KINDS,
   type WorkflowConditionOperator,
   type WorkflowConnectionV1,
+  type WorkflowCustomModuleV1,
   type WorkflowFieldV1,
   type WorkflowHttpHeaderV1,
   type WorkflowHttpMethod,
+  type WorkflowModuleFieldType,
+  type WorkflowModuleFieldV1,
   type WorkflowNodeKind,
   type WorkflowNodeRunResultV1,
   type WorkflowNodePresetV1,
@@ -317,8 +321,66 @@ export function normalizeWorkflowNode(value: unknown, index: number): WorkflowNo
         type: 'delay',
         config: { delayMs: normalizePositiveInteger(config.delayMs, 1_000, 0, 86_400_000) }
       }
+    case 'custom':
+      return {
+        ...base,
+        type: 'custom',
+        config: { moduleId: asTrimmed(config.moduleId), values: normalizeStringRecord(config.values) }
+      }
     default:
       return null
+  }
+}
+
+function normalizeStringRecord(value: unknown): Record<string, string> {
+  const out: Record<string, string> = {}
+  let count = 0
+  for (const [key, raw] of Object.entries(record(value))) {
+    if (count >= 100) break
+    const trimmedKey = key.trim()
+    if (!trimmedKey) continue
+    out[trimmedKey] = typeof raw === 'string' ? raw : raw == null ? '' : String(raw)
+    count += 1
+  }
+  return out
+}
+
+function normalizeModuleField(value: unknown): WorkflowModuleFieldV1 | null {
+  const f = record(value)
+  const key = asTrimmed(f.key)
+  if (!key) return null
+  const type = WORKFLOW_MODULE_FIELD_TYPES.includes(f.type as WorkflowModuleFieldType)
+    ? (f.type as WorkflowModuleFieldType)
+    : 'text'
+  return {
+    key,
+    label: asTrimmed(f.label) || key,
+    type,
+    defaultValue: asText(f.defaultValue),
+    options: Array.isArray(f.options)
+      ? f.options.map((option) => asTrimmed(option)).filter((option) => option.length > 0).slice(0, 50)
+      : [],
+    placeholder: asTrimmed(f.placeholder)
+  }
+}
+
+function normalizeCustomModule(value: unknown, index: number): WorkflowCustomModuleV1 | null {
+  const m = record(value)
+  const id = asTrimmed(m.id)
+  if (!id) return null
+  return {
+    id,
+    name: asTrimmed(m.name) || `Module ${index + 1}`,
+    description: asText(m.description),
+    icon: asTrimmed(m.icon),
+    language: m.language === 'python' || m.language === 'bash' ? m.language : 'javascript',
+    fields: Array.isArray(m.fields)
+      ? m.fields
+          .map((field) => normalizeModuleField(field))
+          .filter((field): field is WorkflowModuleFieldV1 => field !== null)
+          .slice(0, 50)
+      : [],
+    code: asText(m.code)
   }
 }
 
@@ -417,7 +479,8 @@ export function defaultWorkflowSettings(): WorkflowSettingsV1 {
     webhookPort: 8799,
     webhookSecret: '',
     workflows: [],
-    presets: []
+    presets: [],
+    modules: []
   }
 }
 
@@ -457,6 +520,12 @@ export function normalizeWorkflowSettings(input: WorkflowSettingsPatchV1 | undef
           .map((preset, index) => normalizeNodePreset(preset, index))
           .filter((preset): preset is WorkflowNodePresetV1 => preset !== null)
           .slice(0, MAX_WORKFLOW_PRESETS)
+      : [],
+    modules: Array.isArray(source.modules)
+      ? source.modules
+          .map((module, index) => normalizeCustomModule(module, index))
+          .filter((module): module is WorkflowCustomModuleV1 => module !== null)
+          .slice(0, MAX_WORKFLOW_PRESETS)
       : []
   }
 }
@@ -470,6 +539,7 @@ export function mergeWorkflowSettings(
     ...current,
     ...patch,
     workflows: patch.workflows ?? current.workflows,
-    presets: patch.presets ?? current.presets
+    presets: patch.presets ?? current.presets,
+    modules: patch.modules ?? current.modules
   })
 }

@@ -12,12 +12,13 @@ import {
   normalizeWorkflowSettings,
   type AppSettingsPatch,
   type AppSettingsV1,
+  type WorkflowCustomModuleV1,
   type WorkflowRunResult,
   type WorkflowV1
 } from '../shared/app-settings'
 import { createWorkflowRuntime } from './workflow-runtime'
 
-function settingsWithWorkflows(workflows: WorkflowV1[]): AppSettingsV1 {
+function settingsWithWorkflows(workflows: WorkflowV1[], modules: WorkflowCustomModuleV1[] = []): AppSettingsV1 {
   return {
     version: 1,
     locale: 'en',
@@ -33,7 +34,7 @@ function settingsWithWorkflows(workflows: WorkflowV1[]): AppSettingsV1 {
     write: defaultWriteSettings(),
     claw: defaultClawSettings(),
     schedule: defaultScheduleSettings(),
-    workflow: normalizeWorkflowSettings({ enabled: true, workflows }),
+    workflow: normalizeWorkflowSettings({ enabled: true, workflows, modules }),
     guiUpdate: { channel: 'stable' },
     codePromptPrefix: '',
     disabledSkillIds: []
@@ -760,6 +761,46 @@ describe('WorkflowRuntime end-to-end execution', () => {
     const output = JSON.parse(code.outputJson) as { got: { n: string }; lang: string }
     expect(output.lang).toBe('bash')
     expect(output.got.n).toBe('5')
+    runtime.stop()
+  }, 15_000)
+
+  it('custom node runs its module with the injected $fields', async () => {
+    const module: WorkflowCustomModuleV1 = {
+      id: 'mod-greet',
+      name: 'Greet',
+      description: '',
+      icon: '',
+      language: 'javascript',
+      fields: [{ key: 'who', label: 'Who', type: 'text', defaultValue: 'world', options: [], placeholder: '' }],
+      code: 'return { greeting: "hi " + $fields.who }'
+    }
+    const store = createStore(
+      settingsWithWorkflows(
+        [
+          buildWorkflow({
+            id: 'wf-cm',
+            name: 'CM',
+            enabled: true,
+            nodes: [
+              { id: 'm', type: 'manual-trigger', config: {} },
+              { id: 'c', type: 'custom', config: { moduleId: 'mod-greet', values: { who: 'Kun' } } }
+            ],
+            connections: [{ id: 'e1', source: 'm', sourceHandle: 'out', target: 'c', targetHandle: 'in' }]
+          })
+        ],
+        [module]
+      )
+    )
+    const runtime = createWorkflowRuntime({ store: store as never, runtimeRequest: vi.fn() as never, logError: vi.fn() })
+    const runId = requireOk(await runtime.runWorkflow('wf-cm'))
+    await waitFor(async () => {
+      const run = (await store.load()).workflow.workflows[0].runs.find((entry) => entry.id === runId)
+      return Boolean(run && run.status !== 'running')
+    }, 10_000)
+    const run = store.read().workflow.workflows[0].runs.find((entry) => entry.id === runId)!
+    expect(run.status).toBe('success')
+    const custom = run.nodeResults.find((result) => result.nodeId === 'c')!
+    expect(JSON.parse(custom.outputJson)).toEqual({ greeting: 'hi Kun' })
     runtime.stop()
   }, 15_000)
 })

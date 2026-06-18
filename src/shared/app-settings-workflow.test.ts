@@ -113,7 +113,7 @@ describe('mergeWorkflowSettings', () => {
   it('keeps presets when a patch omits them', () => {
     const current = normalizeWorkflowSettings({
       presets: [{ id: 'p1', label: 'My HTTP', nodeType: 'http-request', nodeName: 'Call API', config: { url: 'https://x' } }]
-    })
+    } as unknown as Parameters<typeof normalizeWorkflowSettings>[0])
     const merged = mergeWorkflowSettings(current, { enabled: true })
     expect(merged.presets.map((preset) => preset.id)).toEqual(['p1'])
   })
@@ -126,7 +126,7 @@ describe('normalizeWorkflowSettings presets', () => {
         { id: 'p1', label: 'My HTTP', nodeType: 'http-request', nodeName: 'Call API', config: { url: 'https://x', method: 'POST' } },
         { id: 'bad', label: 'Bogus', nodeType: 'not-a-real-kind', nodeName: '', config: {} }
       ]
-    })
+    } as unknown as Parameters<typeof normalizeWorkflowSettings>[0])
     expect(settings.presets).toHaveLength(1)
     const preset = settings.presets[0]
     expect(preset.id).toBe('p1')
@@ -140,7 +140,7 @@ describe('normalizeWorkflowSettings presets', () => {
   it('falls back to a label from the node when none is given', () => {
     const settings = normalizeWorkflowSettings({
       presets: [{ id: 'p2', label: '', nodeType: 'delay', nodeName: 'Wait a bit', config: {} }]
-    })
+    } as unknown as Parameters<typeof normalizeWorkflowSettings>[0])
     expect(settings.presets[0].label).toBe('Wait a bit')
   })
 })

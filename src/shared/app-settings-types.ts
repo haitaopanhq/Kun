@@ -556,6 +556,7 @@ export type WorkflowNodeKind =
   | 'subworkflow'
   | 'loop'
   | 'delay'
+  | 'custom'
 
 export const WORKFLOW_NODE_KINDS: readonly WorkflowNodeKind[] = [
   'manual-trigger',
@@ -575,7 +576,8 @@ export const WORKFLOW_NODE_KINDS: readonly WorkflowNodeKind[] = [
   'merge',
   'subworkflow',
   'loop',
-  'delay'
+  'delay',
+  'custom'
 ]
 
 export type WorkflowRunStatus = 'idle' | 'running' | 'success' | 'error'
@@ -728,6 +730,46 @@ export type WorkflowSubWorkflowConfigV1 = {
   workflowId: string
 }
 
+/** A node that runs a user-defined custom module, with the module's field values. */
+export type WorkflowCustomConfigV1 = {
+  /** id of the WorkflowCustomModuleV1 this node runs. */
+  moduleId: string
+  /** Field key -> value (stored as strings; coerced by the field's type at runtime). */
+  values: Record<string, string>
+}
+
+export const WORKFLOW_MODULE_FIELD_TYPES = ['text', 'textarea', 'number', 'boolean', 'select'] as const
+export type WorkflowModuleFieldType = (typeof WORKFLOW_MODULE_FIELD_TYPES)[number]
+
+/** One input on a custom module's auto-generated form. */
+export type WorkflowModuleFieldV1 = {
+  /** Identifier exposed to the script as $fields.<key> / WORKFLOW_FIELDS[<key>]. */
+  key: string
+  label: string
+  type: WorkflowModuleFieldType
+  /** Default value (string form); number/boolean are coerced from this. */
+  defaultValue: string
+  /** Options for `select` fields. */
+  options: string[]
+  placeholder: string
+}
+
+/**
+ * A reusable, user-defined module = a script (JS/Python/Shell) plus a set of
+ * named form fields. Instantiated on the canvas as a `custom` node, which shows
+ * a form generated from `fields` and runs `code` with those values injected.
+ */
+export type WorkflowCustomModuleV1 = {
+  id: string
+  name: string
+  description: string
+  /** Reserved for a future icon picker; empty uses a generic module icon. */
+  icon: string
+  language: WorkflowCodeLanguage
+  fields: WorkflowModuleFieldV1[]
+  code: string
+}
+
 /**
  * Loop agent: repeatedly runs a body workflow, feeding each iteration's output
  * back in as the next input, until the stop condition holds or maxIterations is
@@ -795,6 +837,7 @@ export type WorkflowNodeConfigByKind = {
   subworkflow: WorkflowSubWorkflowConfigV1
   loop: WorkflowLoopConfigV1
   delay: WorkflowDelayConfigV1
+  custom: WorkflowCustomConfigV1
 }
 
 /** Discriminated union over `type`, each kind carrying its own `config`. */
@@ -894,6 +937,8 @@ export type WorkflowSettingsV1 = {
   workflows: WorkflowV1[]
   /** Reusable palette items the user saved from configured nodes. */
   presets: WorkflowNodePresetV1[]
+  /** User-defined script-backed modules. */
+  modules: WorkflowCustomModuleV1[]
 }
 
 export type WorkflowSettingsPatchV1 = Partial<Omit<WorkflowSettingsV1, 'workflows'>> & {

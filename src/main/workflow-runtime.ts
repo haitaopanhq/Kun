@@ -10,6 +10,7 @@ import type {
   WorkflowCodeCheckResult,
   WorkflowCodeLanguage,
   WorkflowConditionConfigV1,
+  WorkflowCustomModuleV1,
   WorkflowConnectionV1,
   WorkflowHttpRequestConfigV1,
   WorkflowNodeRunResultV1,
@@ -338,8 +339,17 @@ const COMMAND_TIMEOUT_MS = 30_000
 const PYTHON_BIN = process.env.WORKFLOW_PYTHON_BIN?.trim() || 'python3'
 const MAX_SUBWORKFLOW_DEPTH = 5
 
-function runCodeNode(code: string, payload: WorkflowPayload): NodeOutcome {
-  const sandbox: Record<string, unknown> = { $json: payload.json, $text: payload.text, __result: undefined }
+function runCodeNode(
+  code: string,
+  payload: WorkflowPayload,
+  fields: Record<string, unknown> = {}
+): NodeOutcome {
+  const sandbox: Record<string, unknown> = {
+    $json: payload.json,
+    $text: payload.text,
+    $fields: fields,
+    __result: undefined
+  }
   try {
     runInNewContext(`__result = (function(){\n${code}\n})()`, sandbox, {
       timeout: CODE_TIMEOUT_MS,
@@ -364,12 +374,18 @@ function runCodeNode(code: string, payload: WorkflowPayload): NodeOutcome {
 function runCommandNode(
   language: 'python' | 'bash',
   code: string,
-  payload: WorkflowPayload
+  payload: WorkflowPayload,
+  fields: Record<string, unknown> = {}
 ): Promise<NodeOutcome> {
   const bin = language === 'python' ? PYTHON_BIN : 'bash'
   return new Promise((resolve, reject) => {
     const child = spawn(bin, ['-c', code], {
-      env: { ...process.env, WORKFLOW_TEXT: payload.text ?? '', WORKFLOW_JSON: safeJson(payload.json) }
+      env: {
+        ...process.env,
+        WORKFLOW_TEXT: payload.text ?? '',
+        WORKFLOW_JSON: safeJson(payload.json),
+        WORKFLOW_FIELDS: safeJson(fields)
+      }
     })
     let stdout = ''
     let stderr = ''
@@ -455,6 +471,21 @@ function resolveWorkflowImageGen(
     }
   }
   return resolveKunImageGenerationSettings(patched)
+}
+
+/** Coerce a custom node's stored string values into typed $fields for its module. */
+function coerceModuleFields(
+  module: WorkflowCustomModuleV1,
+  values: Record<string, string>
+): Record<string, unknown> {
+  const out: Record<string, unknown> = {}
+  for (const field of module.fields) {
+    const raw = values[field.key] ?? field.defaultValue ?? ''
+    if (field.type === 'number') out[field.key] = raw === '' ? 0 : Number(raw) || 0
+    else if (field.type === 'boolean') out[field.key] = raw === 'true' || raw === '1'
+    else out[field.key] = raw
+  }
+  return out
 }
 
 /**
@@ -1274,6 +1305,14 @@ export class WorkflowRuntime {
       case 'delay':
         await sleep(node.config.delayMs)
         return { payload, message: `Waited ${node.config.delayMs}ms` }
+      case 'custom': {
+        const module = settings.workflow.modules.find((item) => item.id === node.config.moduleId)
+        if (!module) throw new Error('Custom module not found — it may have been deleted.')
+        const fields = coerceModuleFields(module, node.config.values)
+        return module.language === 'python' || module.language === 'bash'
+          ? runCommandNode(module.language, module.code, payload, fields)
+          : runCodeNode(module.code, payload, fields)
+      }
       default:
         return { payload, message: '' }
     }
