@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest'
 import type { SkillRootListItem } from '@shared/kun-gui-api'
 import {
   buildMcpConfig,
+  buildRemoteMcpConfig,
   customMcpConfigFragment,
   mcpConfigHasServer,
+  mcpConfigHasServers,
   mcpMarketplaceItemsFromConfigAndDiagnostics,
   mergeMcpJsonConfig,
   recommendedMarketplaceItemIds,
@@ -21,8 +23,41 @@ describe('PluginMarketplaceView MCP config helpers', () => {
     expect(recommendedMarketplaceItemIds()).toEqual(expect.arrayContaining([
       'sequential-thinking',
       'memory',
-      'brave-search'
+      'brave-search',
+      'vercel',
+      'google-workspace'
     ]))
+  })
+
+  it('builds remote OAuth MCP server config using Kun-supported transport fields', () => {
+    const config = buildRemoteMcpConfig({
+      vercel: 'https://mcp.vercel.com',
+      google_drive: 'https://drivemcp.googleapis.com/mcp/v1',
+      google_calendar: 'https://calendarmcp.googleapis.com/mcp/v1'
+    })
+
+    expect(config).toEqual({
+      servers: {
+        vercel: expect.objectContaining({
+          enabled: true,
+          transport: 'streamable-http',
+          url: 'https://mcp.vercel.com',
+          trustScope: 'user'
+        }),
+        google_drive: expect.objectContaining({
+          enabled: true,
+          transport: 'streamable-http',
+          url: 'https://drivemcp.googleapis.com/mcp/v1',
+          trustScope: 'user'
+        }),
+        google_calendar: expect.objectContaining({
+          enabled: true,
+          transport: 'streamable-http',
+          url: 'https://calendarmcp.googleapis.com/mcp/v1',
+          trustScope: 'user'
+        })
+      }
+    })
   })
 
   it('merges recommended MCP servers into JSON config without dropping existing fields', () => {
@@ -106,6 +141,27 @@ describe('PluginMarketplaceView MCP config helpers', () => {
     })
 
     expect(mcpConfigHasServer(content, 'github')).toBe(true)
+  })
+
+  it('detects all servers required by a multi-server connector', () => {
+    const content = JSON.stringify({
+      servers: {
+        google_gmail: { transport: 'streamable-http', url: 'https://gmailmcp.googleapis.com/mcp/v1' },
+        google_drive: { transport: 'streamable-http', url: 'https://drivemcp.googleapis.com/mcp/v1' },
+        google_calendar: { transport: 'streamable-http', url: 'https://calendarmcp.googleapis.com/mcp/v1' },
+        google_people: { transport: 'streamable-http', url: 'https://people.googleapis.com/mcp/v1' },
+        google_chat: { transport: 'streamable-http', url: 'https://chatmcp.googleapis.com/mcp/v1' }
+      }
+    })
+
+    expect(mcpConfigHasServers(content, [
+      'google_gmail',
+      'google_drive',
+      'google_calendar',
+      'google_people',
+      'google_chat'
+    ])).toBe(true)
+    expect(mcpConfigHasServers(content, ['google_gmail', 'google_drive', 'google_tasks'])).toBe(false)
   })
 
   it('turns configured MCP servers into personal marketplace items', () => {

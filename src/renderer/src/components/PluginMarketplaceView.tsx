@@ -52,11 +52,20 @@ type MarketplaceItem = {
   detail?: string
   statusTone?: 'default' | 'success' | 'warning' | 'error'
   systemManaged?: boolean
+  serverIds?: string[]
   mcpConfig?: (workspaceRoot: string) => JsonRecord
+  oauth?: OAuthConnectorInfo
   skillInstructions?: string
 }
 
 type JsonRecord = Record<string, unknown>
+
+type OAuthConnectorInfo = {
+  docsUrl: string
+  permissionKeys: string[]
+  setupKeys: string[]
+  noteKey?: string
+}
 
 type SkillRootOption = {
   id: SkillRootId
@@ -158,6 +167,18 @@ function buildStdioMcpServer(
   }
 }
 
+function buildRemoteMcpServer(url: string): JsonRecord {
+  return {
+    enabled: true,
+    transport: 'streamable-http',
+    url,
+    headers: {},
+    env: {},
+    trustScope: 'user',
+    timeoutMs: 30_000
+  }
+}
+
 export function buildMcpConfig(
   id: string,
   command: string,
@@ -168,6 +189,22 @@ export function buildMcpConfig(
     servers: {
       [id]: buildStdioMcpServer(command, args, options)
     }
+  }
+}
+
+const GOOGLE_WORKSPACE_MCP_SERVERS = {
+  google_gmail: 'https://gmailmcp.googleapis.com/mcp/v1',
+  google_drive: 'https://drivemcp.googleapis.com/mcp/v1',
+  google_calendar: 'https://calendarmcp.googleapis.com/mcp/v1',
+  google_people: 'https://people.googleapis.com/mcp/v1',
+  google_chat: 'https://chatmcp.googleapis.com/mcp/v1'
+} as const
+
+export function buildRemoteMcpConfig(servers: Record<string, string>): JsonRecord {
+  return {
+    servers: Object.fromEntries(
+      Object.entries(servers).map(([id, url]) => [id, buildRemoteMcpServer(url)])
+    )
   }
 }
 
@@ -228,6 +265,16 @@ function mcpStatusTone(status: string): MarketplaceItem['statusTone'] {
 export function mcpConfigHasServer(content: string, id: string): boolean {
   try {
     return Object.prototype.hasOwnProperty.call(mcpServersFromConfig(parseMcpJsonConfig(content)), id)
+  } catch {
+    return false
+  }
+}
+
+export function mcpConfigHasServers(content: string, ids: readonly string[]): boolean {
+  if (ids.length === 0) return false
+  try {
+    const servers = mcpServersFromConfig(parseMcpJsonConfig(content))
+    return ids.every((id) => Object.prototype.hasOwnProperty.call(servers, id))
   } catch {
     return false
   }
@@ -485,6 +532,68 @@ const RECOMMENDED_ITEMS: MarketplaceItem[] = [
       )
   },
   {
+    id: 'vercel',
+    kind: 'mcp',
+    titleKey: 'pluginMcpVercelTitle',
+    descriptionKey: 'pluginMcpVercelDesc',
+    group: 'recommended',
+    sourceLabel: 'OAuth',
+    statusTone: 'warning',
+    serverIds: ['vercel'],
+    oauth: {
+      docsUrl: 'https://vercel.com/docs/agent-resources/vercel-mcp.md',
+      permissionKeys: [
+        'pluginOAuthVercelPermissionAccount',
+        'pluginOAuthVercelPermissionProjects',
+        'pluginOAuthVercelPermissionDeployments',
+        'pluginOAuthVercelPermissionLogs'
+      ],
+      setupKeys: [
+        'pluginOAuthSetupInstall',
+        'pluginOAuthVercelSetupProject',
+        'pluginOAuthSetupAuthorize',
+        'pluginOAuthSetupRestart'
+      ],
+      noteKey: 'pluginOAuthVercelNote'
+    },
+    mcpConfig: () =>
+      buildRemoteMcpConfig({
+        vercel: 'https://mcp.vercel.com'
+      })
+  },
+  {
+    id: 'google-workspace',
+    kind: 'mcp',
+    titleKey: 'pluginMcpGoogleWorkspaceTitle',
+    descriptionKey: 'pluginMcpGoogleWorkspaceDesc',
+    group: 'recommended',
+    sourceLabel: 'OAuth',
+    statusTone: 'warning',
+    serverIds: Object.keys(GOOGLE_WORKSPACE_MCP_SERVERS),
+    oauth: {
+      docsUrl: 'https://developers.google.com/workspace/guides/configure-mcp-servers',
+      permissionKeys: [
+        'pluginOAuthGooglePermissionGmail',
+        'pluginOAuthGooglePermissionDrive',
+        'pluginOAuthGooglePermissionDocs',
+        'pluginOAuthGooglePermissionCalendar',
+        'pluginOAuthGooglePermissionPeople',
+        'pluginOAuthGooglePermissionChat'
+      ],
+      setupKeys: [
+        'pluginOAuthGoogleSetupProject',
+        'pluginOAuthGoogleSetupApis',
+        'pluginOAuthGoogleSetupConsent',
+        'pluginOAuthGoogleSetupAuthenticate',
+        'pluginOAuthSetupInstall',
+        'pluginOAuthSetupRestart'
+      ],
+      noteKey: 'pluginOAuthGoogleNote'
+    },
+    mcpConfig: () =>
+      buildRemoteMcpConfig(GOOGLE_WORKSPACE_MCP_SERVERS)
+  },
+  {
     id: 'context7',
     kind: 'mcp',
     titleKey: 'pluginMcpContext7Title',
@@ -609,6 +718,7 @@ export function PluginMarketplaceView(): ReactElement {
   const [skillRoots, setSkillRoots] = useState<SkillRootListItem[]>([])
   const [disabledSkillIds, setDisabledSkillIds] = useState<string[]>([])
   const [skillToggleBusyId, setSkillToggleBusyId] = useState<string | null>(null)
+  const [oauthPreviewItem, setOauthPreviewItem] = useState<MarketplaceItem | null>(null)
 
   const skillRootOptions = useMemo<SkillRootOption[]>(
     () => skillRootOptionsFromRoots(skillRoots, t),
@@ -791,12 +901,13 @@ export function PluginMarketplaceView(): ReactElement {
     [activeKind, discoveredMcpItems, discoveredSkillItems]
   )
 
-  const isInstalled = useCallback((item: Pick<MarketplaceItem, 'kind' | 'id'>): boolean => {
+  const isInstalled = useCallback((item: Pick<MarketplaceItem, 'kind' | 'id'> & Partial<Pick<MarketplaceItem, 'group' | 'serverIds'>>): boolean => {
     if ('group' in item && item.group === 'personal') return true
     const catalogItem = RECOMMENDED_ITEMS.find((candidate) => candidate.kind === item.kind && candidate.id === item.id)
     if (catalogItem?.systemManaged) return true
     if (item.kind === 'skill' && discoveredSkillIds.has(item.id)) return true
     if (item.kind === 'mcp' && discoveredMcpIds.has(item.id)) return true
+    if (item.kind === 'mcp' && item.serverIds?.length) return mcpConfigHasServers(mcpConfigText, item.serverIds)
     const key = storageKey(item.kind, item.id)
     if (installed.includes(key)) return true
     return item.kind === 'mcp' && mcpConfigHasServer(mcpConfigText, item.id)
@@ -852,13 +963,22 @@ export function PluginMarketplaceView(): ReactElement {
     setNotice({ tone: 'success', message: t('pluginMcpAdded', { path: result.path }) })
   }
 
+  const installMcpItem = async (item: MarketplaceItem): Promise<void> => {
+    if (!item.mcpConfig) return
+    await appendMcpConfig(item.id, item.mcpConfig(workspaceRoot))
+  }
+
   const addItem = async (item: MarketplaceItem): Promise<void> => {
+    if (item.kind === 'mcp' && item.oauth) {
+      setNotice(null)
+      setOauthPreviewItem(item)
+      return
+    }
     setBusyId(storageKey(item.kind, item.id))
     setNotice(null)
     try {
       if (item.kind === 'mcp') {
-        if (!item.mcpConfig) return
-        await appendMcpConfig(item.id, item.mcpConfig(workspaceRoot))
+        await installMcpItem(item)
         return
       }
 
@@ -885,6 +1005,19 @@ export function PluginMarketplaceView(): ReactElement {
       setNotice({ tone: 'success', message: t('pluginSkillAdded', { path: result.path }) })
     } catch (e) {
       setNotice({ tone: 'error', message: e instanceof Error ? e.message : String(e) })
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  const confirmOauthInstall = async (item: MarketplaceItem): Promise<void> => {
+    setOauthPreviewItem(null)
+    setBusyId(storageKey(item.kind, item.id))
+    setNotice(null)
+    try {
+      await installMcpItem(item)
+    } catch (error) {
+      setNotice({ tone: 'error', message: error instanceof Error ? error.message : String(error) })
     } finally {
       setBusyId(null)
     }
@@ -1146,6 +1279,14 @@ export function PluginMarketplaceView(): ReactElement {
         ) : null}
 
         {notice ? <NoticeView notice={notice} /> : null}
+        {oauthPreviewItem?.oauth ? (
+          <OAuthConnectorPreviewDialog
+            item={oauthPreviewItem}
+            onClose={() => setOauthPreviewItem(null)}
+            onConfirm={() => void confirmOauthInstall(oauthPreviewItem)}
+            t={t}
+          />
+        ) : null}
 
         {activeKind === 'mcp' ? (
           <PluginSection
@@ -1336,6 +1477,126 @@ function runtimeOverlayErrorMessage(error: unknown, fallback: string): string {
   return /runtimeRequest|kunGui|Cannot read properties/i.test(message) ? fallback : message
 }
 
+function OAuthConnectorPreviewDialog({
+  item,
+  onClose,
+  onConfirm,
+  t
+}: {
+  item: MarketplaceItem
+  onClose: () => void
+  onConfirm: () => void
+  t: (key: string, values?: Record<string, unknown>) => string
+}): ReactElement {
+  const oauth = item.oauth
+  const title = itemTitle(item, t)
+  const openDocs = (): void => {
+    if (!oauth || typeof window.kunGui?.openExternal !== 'function') return
+    void window.kunGui.openExternal(oauth.docsUrl).catch(() => undefined)
+  }
+
+  if (!oauth) return <></>
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 px-4 py-8 backdrop-blur-sm">
+      <section
+        role="dialog"
+        aria-modal="true"
+        aria-label={t('pluginOAuthPreviewTitle', { name: title })}
+        className="max-h-full w-full max-w-2xl overflow-y-auto rounded-3xl border border-ds-border bg-ds-card p-5 shadow-2xl"
+      >
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex min-w-0 items-start gap-3">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-ds-subtle text-ds-ink">
+              <Info className="h-5 w-5" strokeWidth={1.8} />
+            </div>
+            <div className="min-w-0">
+              <h2 className="text-[18px] font-semibold text-ds-ink">
+                {t('pluginOAuthPreviewTitle', { name: title })}
+              </h2>
+              <p className="mt-1 text-[13px] leading-5 text-ds-muted">
+                {t('pluginOAuthPreviewDesc')}
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink"
+            aria-label={t('pluginOAuthClose')}
+          >
+            <span aria-hidden="true" className="text-[18px] leading-none">x</span>
+          </button>
+        </div>
+
+        <div className="mt-5 grid gap-4 md:grid-cols-2">
+          <div className="rounded-2xl border border-ds-border bg-ds-main/35 p-4">
+            <div className="text-[13px] font-semibold text-ds-ink">{t('pluginOAuthPermissionsTitle')}</div>
+            <ul className="mt-3 grid gap-2 text-[13px] leading-5 text-ds-muted">
+              {oauth.permissionKeys.map((key) => (
+                <li key={key} className="flex gap-2">
+                  <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-ds-muted/70" />
+                  <span>{t(key)}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div className="rounded-2xl border border-ds-border bg-ds-main/35 p-4">
+            <div className="text-[13px] font-semibold text-ds-ink">{t('pluginOAuthSetupTitle')}</div>
+            <ol className="mt-3 grid gap-2 text-[13px] leading-5 text-ds-muted">
+              {oauth.setupKeys.map((key, index) => (
+                <li key={key} className="flex gap-2">
+                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-ds-subtle text-[11px] font-semibold text-ds-ink">
+                    {index + 1}
+                  </span>
+                  <span>{t(key)}</span>
+                </li>
+              ))}
+            </ol>
+          </div>
+        </div>
+
+        {oauth.noteKey ? (
+          <div className="mt-4 rounded-2xl border border-amber-300/70 bg-amber-50 px-4 py-3 text-[13px] leading-5 text-amber-800 dark:border-amber-800/70 dark:bg-amber-950/25 dark:text-amber-200">
+            {t(oauth.noteKey)}
+          </div>
+        ) : null}
+
+        <div className="mt-5 rounded-2xl border border-ds-border bg-ds-main/35 p-4">
+          <div className="text-[13px] font-semibold text-ds-ink">{t('pluginOAuthConfigPreviewTitle')}</div>
+          <pre className="mt-3 max-h-52 overflow-auto rounded-xl bg-ds-sidebar/70 p-3 text-[12px] leading-5 text-ds-muted">
+            {item.mcpConfig ? JSON.stringify(item.mcpConfig(''), null, 2) : '{}'}
+          </pre>
+        </div>
+
+        <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-end">
+          <button
+            type="button"
+            onClick={openDocs}
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-ds-border bg-ds-card px-4 py-2 text-[13px] font-semibold text-ds-ink transition hover:bg-ds-hover"
+          >
+            {t('pluginOAuthOpenDocs')}
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="inline-flex items-center justify-center rounded-xl bg-ds-subtle px-4 py-2 text-[13px] font-semibold text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink"
+          >
+            {t('pluginOAuthCancel')}
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            className="inline-flex items-center justify-center rounded-xl bg-ds-userbubble px-4 py-2 text-[13px] font-semibold text-ds-userbubbleFg shadow-sm transition hover:opacity-90"
+          >
+            {t('pluginOAuthInstall')}
+          </button>
+        </div>
+      </section>
+    </div>
+  )
+}
+
 function PluginSection({
   title,
   emptyText,
@@ -1355,7 +1616,7 @@ function PluginSection({
   emptyText: string
   items: MarketplaceItem[]
   busyId: string | null
-  isInstalled: (item: Pick<MarketplaceItem, 'kind' | 'id'>) => boolean
+  isInstalled: (item: Pick<MarketplaceItem, 'kind' | 'id'> & Partial<Pick<MarketplaceItem, 'group' | 'serverIds'>>) => boolean
   onAdd: (item: MarketplaceItem) => Promise<void>
   disabledSkillIds?: string[]
   skillToggleBusyId?: string | null
@@ -1411,6 +1672,11 @@ function PluginSection({
                     {mcpDisabled ? (
                       <span className="shrink-0 rounded-md bg-amber-500/15 px-2 py-0.5 text-[11px] font-semibold text-amber-700 dark:text-amber-200">
                         {t('pluginMcpStatusDisabled')}
+                      </span>
+                    ) : null}
+                    {item.oauth ? (
+                      <span className="shrink-0 rounded-md bg-sky-500/15 px-2 py-0.5 text-[11px] font-semibold text-sky-700 dark:text-sky-200">
+                        {t('pluginOAuthBadge')}
                       </span>
                     ) : null}
                   </div>
