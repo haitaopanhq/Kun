@@ -21,6 +21,7 @@ import type { PipelineStage } from '../contracts/events.js'
 import type { RuntimeErrorSeverity } from '../contracts/errors.js'
 import type { IdGenerator } from '../ports/id-generator.js'
 import type { ImmutablePrefix } from '../cache/immutable-prefix.js'
+import type { CacheRequestSignature } from '../cache/cache-diagnostics.js'
 import { ContextCompactor } from './context-compactor.js'
 import {
   effectiveHistoryAfterLatestCompaction,
@@ -821,19 +822,25 @@ export class AgentLoop {
     this.turnFailures.set(turnId, failure)
   }
 
-  private modelClientDiagnostics(): ModelClientDiagnostics {
+  private modelClientDiagnostics(providerId?: string): ModelClientDiagnostics {
     const client = this.opts.model as ModelClient & {
       config?: {
         baseUrl?: string
         endpointFormat?: string
         model?: string
       }
+      configFor?: (providerId?: string) => {
+        baseUrl?: string
+        endpointFormat?: string
+        model?: string
+      } | undefined
     }
+    const config = client.configFor?.(providerId) ?? client.config
     return {
       provider: client.provider,
-      ...(client.config?.baseUrl ? { providerBaseUrl: sanitizeProviderBaseUrl(client.config.baseUrl) } : {}),
-      ...(client.config?.endpointFormat ? { endpointFormat: client.config.endpointFormat } : {}),
-      ...(client.config?.model ? { configuredModel: client.config.model } : {})
+      ...(config?.baseUrl ? { providerBaseUrl: sanitizeProviderBaseUrl(config.baseUrl) } : {}),
+      ...(config?.endpointFormat ? { endpointFormat: config.endpointFormat } : {}),
+      ...(config?.model ? { configuredModel: config.model } : {})
     }
   }
 
@@ -1317,7 +1324,15 @@ export class AgentLoop {
     let reasoningItemId = ''
     const completedToolCalls: ToolCallLike[] = []
     let stopReason: 'stop' | 'tool_calls' | 'length' | 'error' = 'stop'
-    const modelClientDiagnostics = this.modelClientDiagnostics()
+    const modelClientDiagnostics = this.modelClientDiagnostics(request.providerId)
+    const cacheSignature: CacheRequestSignature = {
+      model: request.model,
+      providerId: request.providerId?.trim() || modelClientDiagnostics.provider || 'default',
+      endpointFormat: modelClientDiagnostics.endpointFormat || 'unknown',
+      prefixFingerprint: this.opts.prefix.fingerprint,
+      toolCatalogFingerprint: toolCatalog.fingerprint,
+      activeSkillIds: skillResolution.activeSkillIds
+    }
     let persistedReasoning = false
     let persistedText = false
     const persistAccumulatedResponse = async (): Promise<void> => {
@@ -1455,7 +1470,7 @@ export class AgentLoop {
         }
         case 'usage': {
           this.recordPromptPressure(threadId, request.model, chunk.usage.promptTokens)
-          const usage = this.opts.usage.record(threadId, chunk.usage)
+          const usage = this.opts.usage.record(threadId, chunk.usage, cacheSignature)
           await this.opts.events.record({
             kind: 'usage',
             threadId,
