@@ -875,6 +875,7 @@ describe('syncGuiManagedKunConfig', () => {
       servers: {
         'stata-mcp': {
           command: 'uvx',
+          cwd: 'D:\\Workspace\\stata-project',
           args: ['stata-mcp'],
           env: {
             STATA_CLI: 'D:\\stata\\StataMP-64.exe'
@@ -902,6 +903,7 @@ describe('syncGuiManagedKunConfig', () => {
       enabled: true,
       transport: 'stdio',
       command: 'uvx',
+      cwd: 'D:\\Workspace\\stata-project',
       args: ['stata-mcp'],
       env: {
         STATA_CLI: 'D:\\stata\\StataMP-64.exe'
