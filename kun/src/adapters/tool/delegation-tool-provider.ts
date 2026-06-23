@@ -66,7 +66,7 @@ export function buildDelegationToolProviders(runtime: DelegationRuntime | undefi
 
 function buildDelegateTaskDescription(
   runtime: DelegationRuntime,
-  profiles: { name: string; toolPolicy: string; model?: string }[]
+  profiles: { name: string; toolPolicy: string; model?: string; providerId?: string }[]
 ): string {
   const lines = [
     'Run a bounded child agent task and return its summary.',
@@ -75,7 +75,7 @@ function buildDelegateTaskDescription(
   ]
   if (profiles.length) {
     const summary = profiles
-      .map((profile) => `${profile.name} (${profile.toolPolicy}${profile.model ? `, ${profile.model}` : ''})`)
+      .map((profile) => `${profile.name} (${profile.toolPolicy}${profile.model ? `, ${profile.model}` : ''}${profile.providerId ? ` @${profile.providerId}` : ''})`)
       .join('; ')
     lines.push(`Available profiles: ${summary}.`)
   }

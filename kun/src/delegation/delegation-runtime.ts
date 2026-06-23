@@ -31,6 +31,8 @@ export const ChildRunRecord = z.object({
   prompt: z.string().min(1),
   workspace: z.string().optional(),
   model: z.string().optional(),
+  /** Resolved provider id the child routed through, when one was selected. */
+  providerId: z.string().optional(),
   /** Resolved subagent profile name, when one was selected. */
   profile: z.string().optional(),
   /** Effective tool policy applied to the child (read-only vs inherited). */
@@ -64,6 +66,7 @@ export type ChildRunExecutor = (input: {
   prompt: string
   workspace?: string
   model?: string
+  providerId?: string
   toolPolicy: SubagentToolPolicy
   promptPreamble?: string
   signal: AbortSignal
@@ -150,6 +153,7 @@ export class DelegationRuntime {
     prompt: string
     workspace?: string
     model?: string
+    providerId?: string
     profile?: string
     signal: AbortSignal
   }): Promise<ChildRunRecord> {
@@ -165,6 +169,7 @@ export class DelegationRuntime {
     }
     const toolPolicy = profile?.toolPolicy ?? config.defaultToolPolicy
     const resolvedModel = input.model?.trim() || profile?.model
+    const resolvedProviderId = input.providerId?.trim() || profile?.providerId
     const promptPreamble = profile?.promptPreamble
 
     // Reserve against the per-thread budget before persisting anything.
@@ -183,6 +188,7 @@ export class DelegationRuntime {
       prompt: input.prompt,
       workspace: input.workspace,
       model: resolvedModel,
+      providerId: resolvedProviderId,
       profile: profileName,
       toolPolicy,
       status: 'queued',
@@ -222,6 +228,7 @@ export class DelegationRuntime {
         prompt: input.prompt,
         workspace: input.workspace,
         model: resolvedModel,
+        ...(resolvedProviderId ? { providerId: resolvedProviderId } : {}),
         toolPolicy,
         ...(promptPreamble ? { promptPreamble } : {}),
         signal: input.signal
@@ -324,11 +331,12 @@ export class DelegationRuntime {
   }
 
   /** Configured profiles, surfaced to the delegate_task tool schema/UI. */
-  listProfiles(): { name: string; toolPolicy: SubagentToolPolicy; model?: string }[] {
+  listProfiles(): { name: string; toolPolicy: SubagentToolPolicy; model?: string; providerId?: string }[] {
     return Object.entries(this.options.config.profiles).map(([name, profile]) => ({
       name,
       toolPolicy: profile.toolPolicy,
-      ...(profile.model ? { model: profile.model } : {})
+      ...(profile.model ? { model: profile.model } : {}),
+      ...(profile.providerId ? { providerId: profile.providerId } : {})
     }))
   }
 
@@ -371,6 +379,7 @@ export class DelegationRuntime {
         childStatus: record.status,
         childSeq: ++this.childSeq,
         ...(record.model ? { childModel: record.model } : {}),
+        ...(record.providerId ? { childProviderId: record.providerId } : {}),
         ...(record.profile ? { childProfile: record.profile } : {}),
         ...(record.toolPolicy ? { childToolPolicy: record.toolPolicy } : {}),
         ...(record.prefixReused !== undefined ? { prefixReused: record.prefixReused } : {}),

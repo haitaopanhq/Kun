@@ -202,6 +202,8 @@ export const SubagentProfileConfig = z
   .object({
     /** Overrides the child model for this role (falls back to the server default). */
     model: z.string().min(1).optional(),
+    /** Routes this role's child to a specific provider id (falls back to the runtime default provider). */
+    providerId: z.string().min(1).optional(),
     /** Short instruction prepended to the delegated task prompt. */
     promptPreamble: z.string().min(1).optional(),
     /** Whether the child is restricted to read-only tools or inherits the full set. */

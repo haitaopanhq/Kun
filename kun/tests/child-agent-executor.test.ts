@@ -140,4 +140,30 @@ describe('child agent executor', () => {
     })
     expect(result).toMatchObject({ prefixReused: true, inheritedHistoryItems: 0 })
   })
+
+  it('threads the input providerId onto the child ModelRequest for routing', async () => {
+    const seen: ModelRequest[] = []
+    const executor = createChildAgentExecutor({
+      model: model([
+        { kind: 'assistant_text_delta', text: 'ok' },
+        { kind: 'completed', stopReason: 'stop' }
+      ], seen),
+      toolHost: new LocalToolHost({ registry: new CapabilityRegistry([]) }),
+      prefix: createImmutablePrefix({ systemPrompt: 'child system' }),
+      defaultModel: 'child-test',
+      nowIso: () => '2026-06-03T00:00:00.000Z'
+    })
+
+    await executor({
+      childId: 'child_provider',
+      parentThreadId: 'thr_parent',
+      parentTurnId: 'turn_parent',
+      prompt: 'Route me',
+      providerId: 'minimax',
+      toolPolicy: 'inherit',
+      signal: new AbortController().signal
+    })
+
+    expect(seen[0]?.providerId).toBe('minimax')
+  })
 })

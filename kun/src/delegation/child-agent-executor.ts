@@ -118,7 +118,11 @@ export function createChildAgentExecutor(options: ChildAgentExecutorOptions): Ch
       model,
       mode: 'agent',
       approvalPolicy: options.approvalPolicy ?? 'auto',
-      ...(options.sandboxMode ? { sandboxMode: options.sandboxMode } : {})
+      ...(options.sandboxMode ? { sandboxMode: options.sandboxMode } : {}),
+      // Route the child to the profile's provider. ThreadService threads
+      // providerId into every ModelRequest, and the executor's model is the
+      // MultiProviderModelClient, so this single field is all routing needs.
+      ...(input.providerId ? { providerId: input.providerId } : {})
     }, {
       id: input.childId,
       title: childThreadTitle(input.childId, input.label)

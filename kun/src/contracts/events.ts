@@ -78,6 +78,7 @@ const RuntimeEventBase = z.object({
     // the GUI can show prefix reuse, tool fan-out, timing, and cost per
     // subagent without a separate diagnostics fetch.
     childModel: z.string().optional(),
+    childProviderId: z.string().optional(),
     childProfile: z.string().optional(),
     childToolPolicy: SubagentToolPolicy.optional(),
     prefixReused: z.boolean().optional(),
