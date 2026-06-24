@@ -223,7 +223,7 @@ describe('SkillRuntime', () => {
   })
 
   it('returns no catalog when skills are disabled', async () => {
-    const runtime = await SkillRuntime.create({ enabled: false, roots: [], workspaceRoots: [], globalRoots: [], legacySkillMd: true })
+    const runtime = await SkillRuntime.create({ enabled: false, roots: [], workspaceRoots: [], globalRoots: [], disabledIds: [], legacySkillMd: true })
     expect(runtime.catalogInstruction()).toBeUndefined()
   })
 
@@ -255,6 +255,38 @@ describe('SkillRuntime', () => {
     const result = await runtime.loadSkillById('does-not-exist')
     expect('error' in result).toBe(true)
     if ('error' in result) expect(result.error).toContain('known')
+  })
+
+  it('excludes disabledIds from catalog, matching, load, and diagnostics', async () => {
+    await writeSkill('gmail', {
+      id: 'gmail',
+      name: 'Gmail',
+      triggers: { commands: ['/gmail'] }
+    }, 'gmail body')
+    await writeSkill('keeper', {
+      id: 'keeper',
+      name: 'Keeper',
+      triggers: { commands: ['/keeper'] }
+    }, 'keeper body')
+    // Mixed-case / prefixed forms must still match the slugged discovered id.
+    const runtime = await createRuntime({}, { disabledIds: ['Gmail', 'skill:nonexistent'] })
+
+    // diagnostics + count
+    expect(runtime.diagnostics().skills.map((skill) => skill.id)).toEqual(['keeper'])
+    expect(runtime.count()).toBe(1)
+
+    // global catalog
+    expect(runtime.catalogInstruction()).not.toContain('Gmail')
+    expect(runtime.catalogInstruction()).toContain('Keeper')
+
+    // per-turn catalog + auto-match (command trigger)
+    const resolution = await runtime.resolveTurn({ prompt: '/gmail send', workspace: root })
+    expect(resolution.catalogInstruction).not.toContain('Gmail')
+    expect(resolution.activeSkillIds).not.toContain('gmail')
+
+    // load_skill
+    const result = await runtime.loadSkillById('gmail')
+    expect('error' in result).toBe(true)
   })
 
   it('truncates an oversized skill body to the instruction budget on load', async () => {
@@ -389,13 +421,17 @@ describe('SkillRuntime', () => {
     expect(turn?.skillInjectionBytes).toBeGreaterThan(0)
   })
 
-  async function createRuntime(options: Parameters<typeof SkillRuntime.create>[1] = {}) {
+  async function createRuntime(
+    options: Parameters<typeof SkillRuntime.create>[1] = {},
+    skillsOverride: Record<string, unknown> = {}
+  ) {
     const config = KunCapabilitiesConfig.parse({
       skills: {
         enabled: true,
         roots: [root],
         workspaceRoots: [],
-        legacySkillMd: true
+        legacySkillMd: true,
+        ...skillsOverride
       }
     })
     return SkillRuntime.create(config.skills, options)

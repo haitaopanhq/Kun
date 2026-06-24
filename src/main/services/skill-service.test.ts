@@ -13,7 +13,12 @@ import {
   defaultTerminalSettings,
   type AppSettingsV1
 } from '../../shared/app-settings'
-import { guiSkillRootsForRuntime, listGuiSkillRoots, listGuiSkills } from './skill-service'
+import {
+  guiSkillRootsForRuntime,
+  isCodexPluginCacheRoot,
+  listGuiSkillRoots,
+  listGuiSkills
+} from './skill-service'
 
 vi.mock('node:os', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:os')>()
@@ -208,6 +213,29 @@ describe('skill-service', () => {
     settings.claw.skills.disabledDirs = [pluginRoot]
     expect((await guiSkillRootsForRuntime(settings, workspaceRoot)).map((root) => comparable(root.path)))
       .not.toContain(comparable(pluginRoot))
+  })
+
+  it('stops scanning Codex plugin caches when global-codex is disabled', async () => {
+    const workspaceRoot = join(tempRoot, 'ws-plugin-global')
+    const pluginRoot = join(tempRoot, '.codex', 'plugins', 'cache', 'gmail', '1.0', 'skills')
+    await mkdir(join(pluginRoot, 'gmail'), { recursive: true })
+    await writeFile(join(pluginRoot, 'gmail', 'SKILL.md'), ['---', 'name: gmail', '---'].join('\n'), 'utf8')
+
+    const settings = createSettings(workspaceRoot)
+    // Plugin caches are on by default...
+    expect((await guiSkillRootsForRuntime(settings, workspaceRoot)).map((root) => comparable(root.path)))
+      .toContain(comparable(pluginRoot))
+
+    // ...and disabling the Codex global root toggle takes them all down with it.
+    settings.claw.skills.disabledDirs = ['global-codex']
+    expect((await guiSkillRootsForRuntime(settings, workspaceRoot)).map((root) => comparable(root.path)))
+      .not.toContain(comparable(pluginRoot))
+  })
+
+  it('recognizes roots under ~/.codex/plugins/cache as Codex plugin caches', () => {
+    expect(isCodexPluginCacheRoot(join(tempRoot, '.codex', 'plugins', 'cache', 'vercel', '2.1', 'skills'))).toBe(true)
+    expect(isCodexPluginCacheRoot(join(tempRoot, '.codex', 'skills'))).toBe(false)
+    expect(isCodexPluginCacheRoot(join(tempRoot, '.kun', 'skills'))).toBe(false)
   })
 
   it('rejects a skill.json whose entry escapes the package directory (path traversal)', async () => {

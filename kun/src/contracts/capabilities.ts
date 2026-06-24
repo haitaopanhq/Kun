@@ -186,6 +186,13 @@ export const SkillsCapabilityConfig = CapabilityToggleConfig.extend({
   workspaceRoots: z.array(z.string().min(1)).default([]),
   /** Global skill roots (e.g. ~/.kun/skills). Scanned after project roots. */
   globalRoots: z.array(z.string().min(1)).default([]),
+  /**
+   * Skill ids the user disabled in the GUI. Excluded everywhere a skill can
+   * surface (catalog, auto-match, load_skill, diagnostics) so a disabled skill
+   * is truly gone from the runtime, not merely hidden in the UI. Compared after
+   * `slug()` normalization on both sides.
+   */
+  disabledIds: z.array(z.string().min(1)).default([]),
   legacySkillMd: z.boolean().default(true)
 }).strict()
 export type SkillsCapabilityConfig = z.infer<typeof SkillsCapabilityConfig>

@@ -126,7 +126,7 @@ export class SkillRuntime {
     config: SkillsCapabilityConfig | undefined,
     options: SkillRuntimeOptions = {}
   ): Promise<SkillRuntime> {
-    const normalized = config ?? { enabled: false, roots: [], workspaceRoots: [], globalRoots: [], legacySkillMd: true }
+    const normalized = config ?? { enabled: false, roots: [], workspaceRoots: [], globalRoots: [], disabledIds: [], legacySkillMd: true }
     const resolvedOptions = {
       activeLimit: options.activeLimit ?? DEFAULT_ACTIVE_LIMIT,
       instructionBudgetBytes: options.instructionBudgetBytes ?? DEFAULT_INSTRUCTION_BUDGET_BYTES,
@@ -424,6 +424,11 @@ async function discoverSkills(config: SkillsCapabilityConfig): Promise<{
 }> {
   const skills: LoadedSkill[] = []
   const validationErrors: Array<{ root: string; message: string }> = []
+  // Skill ids the user disabled. Slug both sides so `gmail`, `Gmail`, and
+  // `skill:gmail` all match the discovered `slug(manifest.id)`. A disabled
+  // skill is dropped here at the single discovery chokepoint, so it stays out
+  // of the catalog, auto-match, load_skill, diagnostics, and counts alike.
+  const disabledIds = new Set((config.disabledIds ?? []).map(slug))
 
   // Scan project roots (priority over global — loaded first)
   for (const rawRoot of config.roots) {
@@ -460,6 +465,7 @@ async function discoverSkills(config: SkillsCapabilityConfig): Promise<{
 
   const unique = new Map<string, LoadedSkill>()
   for (const skill of skills) {
+    if (disabledIds.has(skill.id)) continue
     if (!unique.has(skill.id)) unique.set(skill.id, skill)
     else validationErrors.push({ root: skill.root, message: `duplicate Skill id: ${skill.id}` })
   }

@@ -842,6 +842,43 @@ describe('syncGuiManagedKunConfig', () => {
     ]))
   })
 
+  it('drops stale Codex plugin cache roots but keeps hand-added manual roots', async () => {
+    if (!tempRoot) throw new Error('temp root not initialized')
+    const configPath = join(tempRoot, 'config.json')
+    // A version directory left behind by a plugin upgrade and a root a user
+    // added by hand to the Kun config file.
+    const staleRoot = join(homedir(), '.codex', 'plugins', 'cache', 'gmail', '0.0.0-stale', 'skills')
+    const manualRoot = join(tempRoot, 'manual', 'skills')
+    writeFileSync(configPath, JSON.stringify({
+      capabilities: { skills: { enabled: true, roots: [staleRoot, manualRoot], legacySkillMd: true } }
+    }), 'utf8')
+    const module = await import('./kun-process')
+
+    await module.syncGuiManagedKunConfig(tempRoot, defaultKunRuntimeSettings())
+
+    const parsed = JSON.parse(readFileSync(configPath, 'utf8')) as any
+    expect(parsed.capabilities.skills.roots).not.toContain(staleRoot)
+    expect(parsed.capabilities.skills.roots).toContain(manualRoot)
+  })
+
+  it('forwards GUI disabledSkillIds into the runtime skills capability', async () => {
+    if (!tempRoot) throw new Error('temp root not initialized')
+    const configPath = join(tempRoot, 'config.json')
+    const module = await import('./kun-process')
+    const settings = createSettings('/tmp/fake-kun-child.js')
+    settings.disabledSkillIds = ['gmail', 'vercel-agent']
+
+    await module.syncGuiManagedKunConfig(tempRoot, defaultKunRuntimeSettings(), {
+      scheduleMcp: {
+        settings,
+        launch: { appPath: '/tmp/deepseek-gui-test-app', execPath: '/tmp/electron', isPackaged: false }
+      }
+    })
+
+    const parsed = JSON.parse(readFileSync(configPath, 'utf8')) as any
+    expect(parsed.capabilities.skills.disabledIds).toEqual(['gmail', 'vercel-agent'])
+  })
+
   it('writes GUI-managed MCP search settings without removing existing servers', async () => {
     if (!tempRoot) throw new Error('temp root not initialized')
     const configPath = join(tempRoot, 'config.json')

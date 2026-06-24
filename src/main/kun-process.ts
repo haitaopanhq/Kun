@@ -60,6 +60,7 @@ import {
   guiSkillManagedComparablePaths,
   guiSkillWorkspaceRootsForRuntime,
   guiSkillRootsForRuntime,
+  isCodexPluginCacheRoot,
   normalizeSkillRootPath
 } from './services/skill-service'
 
@@ -597,10 +598,17 @@ async function skillCapabilityConfigForRuntime(
   // Drop previously-persisted GUI-managed roots so disabling a directory in
   // settings actually removes it — otherwise a toggled-off root would stick
   // around forever via `existing.roots`.
+  // GUI-managed roots are dropped from the carried-over set and rebuilt fresh
+  // below. Besides the common/extra candidates, auto-discovered Codex plugin
+  // caches count as managed too — otherwise old version directories from a
+  // plugin upgrade stay in `roots` forever (#392).
   const managed = guiSkillManagedComparablePaths(settings)
   const manualExisting = stringArrayValue(existing.roots)
     .map(normalizeSkillRootPath)
-    .filter((path) => path.length > 0 && !managed.has(comparableSkillRootPath(path)))
+    .filter((path) =>
+      path.length > 0 &&
+      !managed.has(comparableSkillRootPath(path)) &&
+      !isCodexPluginCacheRoot(path))
   const roots = uniqueStrings([
     ...manualExisting,
     ...(await guiSkillRootsForRuntime(settings)).map((root) => root.path)
@@ -616,6 +624,10 @@ async function skillCapabilityConfigForRuntime(
     workspaceRoots: guiSkillWorkspaceRootsForRuntime(settings),
     // #149: Pass global skill roots from settings (e.g. ~/.kun/skills)
     globalRoots: existing.globalRoots ?? [],
+    // Skills the user disabled in the GUI. Forwarded so the runtime drops them
+    // from discovery — without this they stay loadable via load_skill and keep
+    // appearing in the catalog despite the GUI toggle (#392).
+    disabledIds: settings?.disabledSkillIds ?? stringArrayValue(existing.disabledIds),
     legacySkillMd: existing.legacySkillMd === false ? false : true
   }
 }
