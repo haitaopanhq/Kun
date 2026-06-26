@@ -301,6 +301,8 @@ export type KunGuiApi = {
   claudeSubscriptionStatus: () => Promise<ClaudeSubscriptionStatus>
   /** Run `claude setup-token` (opens browser) and capture the OAuth token. */
   claudeSubscriptionLogin: () => Promise<ClaudeSubscriptionLoginResult>
+  /** List Claude models available to the subscription (via the SDK's supportedModels). */
+  claudeSubscriptionModels: (token?: string) => Promise<string[]>
   setSettings: (partial: AppSettingsPatch) => Promise<AppSettingsV1>
   saveSettingsSilent: (partial: AppSettingsPatch) => Promise<AppSettingsV1>
   runtimeRequest: (path: string, method?: string, body?: string) => Promise<RuntimeRequestResult>

@@ -14,6 +14,7 @@ const api = {
   getSettings: () => ipcRenderer.invoke('settings:get'),
   claudeSubscriptionStatus: () => ipcRenderer.invoke('claude-subscription:status'),
   claudeSubscriptionLogin: () => ipcRenderer.invoke('claude-subscription:login'),
+  claudeSubscriptionModels: (token) => ipcRenderer.invoke('claude-subscription:models', token),
   setSettings: (partial) =>
     ipcRenderer.invoke('settings:set', partial),
   saveSettingsSilent: (partial) =>

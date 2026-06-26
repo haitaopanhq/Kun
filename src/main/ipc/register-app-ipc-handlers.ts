@@ -103,6 +103,7 @@ import {
   resolveBundledClaudeBinary,
   runClaudeSetupToken
 } from '../claude-subscription-auth'
+import { fetchSdkModels } from '../claude-subscription-models'
 import type { JsonSettingsStore } from '../settings-store'
 import { probeModelProvider } from '../provider-connection'
 import type { ClawRuntime } from '../claw-runtime'
@@ -502,6 +503,13 @@ export function registerAppIpcHandlers(options: RegisterAppIpcHandlersOptions): 
       process.cwd()
     ].map((root) => join(root, 'kun'))
     return runClaudeSetupToken({ binaryPath: resolveBundledClaudeBinary(kunRoots) })
+  })
+  ipcMain.handle('claude-subscription:models', async (_event, token: unknown) => {
+    const kunRoots = [
+      app.isPackaged ? app.getAppPath().replace(/app\.asar$/, 'app.asar.unpacked') : app.getAppPath(),
+      process.cwd()
+    ].map((root) => join(root, 'kun'))
+    return fetchSdkModels({ token: typeof token === 'string' ? token : undefined, kunRoots })
   })
   ipcMain.handle('settings:set', async (_, partial: unknown) =>
     applySettingsPatch(

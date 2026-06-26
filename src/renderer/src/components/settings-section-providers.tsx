@@ -1273,6 +1273,7 @@ export function ProvidersSettingsSection({ ctx }: { ctx: Record<string, any> }):
                     <ClaudeSubscriptionSection
                       provider={activeProvider}
                       onTokenChange={(token) => updateModelProvider(activeProvider.id, { apiKey: token })}
+                      onModelsChange={(models) => updateModelProvider(activeProvider.id, { models })}
                       t={t}
                     />
                   ) : (

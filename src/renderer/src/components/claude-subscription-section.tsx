@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactElement } from 'react'
-import { AlertCircle, CheckCircle2, Copy, Loader2, LogIn } from 'lucide-react'
+import { AlertCircle, CheckCircle2, Copy, Download, Loader2, LogIn } from 'lucide-react'
 import type { ModelProviderProfileV1 } from '@shared/app-settings-types'
 import { SecretInput } from './settings-controls'
 
@@ -22,10 +22,13 @@ function loginErrorText(message: string, t: Translate): string {
 export function ClaudeSubscriptionSection({
   provider,
   onTokenChange,
+  onModelsChange,
   t
 }: {
   provider: ModelProviderProfileV1
   onTokenChange: (token: string) => void
+  /** Replace the provider's model list with the ids the SDK reports. */
+  onModelsChange?: (models: string[]) => void
   t: Translate
 }): ReactElement {
   const [status, setStatus] = useState<'checking' | 'logged-in' | 'logged-out'>('checking')
@@ -33,6 +36,28 @@ export function ClaudeSubscriptionSection({
   const [message, setMessage] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null)
   const [showToken, setShowToken] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [modelsBusy, setModelsBusy] = useState(false)
+  const [modelsNote, setModelsNote] = useState<string | null>(null)
+
+  // Pull the subscription's available models via the SDK and fill them in.
+  const fetchModels = async (token?: string): Promise<void> => {
+    if (!onModelsChange) return
+    setModelsBusy(true)
+    setModelsNote(null)
+    try {
+      const ids = await window.kunGui.claudeSubscriptionModels(token?.trim() || undefined)
+      if (ids.length > 0) {
+        onModelsChange(ids)
+        setModelsNote(t('claudeSubModelsFetched').replace('{count}', String(ids.length)))
+      } else {
+        setModelsNote(t('claudeSubModelsEmpty'))
+      }
+    } catch {
+      setModelsNote(t('claudeSubModelsEmpty'))
+    } finally {
+      setModelsBusy(false)
+    }
+  }
 
   const refreshStatus = async (): Promise<void> => {
     setStatus('checking')
@@ -56,6 +81,8 @@ export function ClaudeSubscriptionSection({
         onTokenChange(res.token)
         setStatus('logged-in')
         setMessage({ kind: 'ok', text: t('claudeSubLoginSuccess') })
+        // Right after login, pull the subscription's model list once and fill it.
+        void fetchModels(res.token)
       } else {
         setMessage({ kind: 'err', text: loginErrorText(res.message, t) })
       }
@@ -134,6 +161,25 @@ export function ClaudeSubscriptionSection({
         >
           {message.text}
         </p>
+      ) : null}
+
+      {onModelsChange ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            disabled={modelsBusy}
+            onClick={() => void fetchModels(provider.apiKey)}
+            className="inline-flex h-7 items-center gap-1.5 rounded-full border border-ds-border bg-ds-card px-2.5 text-[12px] font-medium text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {modelsBusy ? (
+              <Loader2 className="h-3 w-3 animate-spin" strokeWidth={1.9} />
+            ) : (
+              <Download className="h-3 w-3" strokeWidth={1.9} />
+            )}
+            {modelsBusy ? t('claudeSubModelsFetching') : t('claudeSubModelsRefresh')}
+          </button>
+          {modelsNote ? <span className="text-[12px] text-ds-muted">{modelsNote}</span> : null}
+        </div>
       ) : null}
 
       <div className="flex items-center gap-2 rounded-lg border border-ds-border bg-ds-card px-3 py-2">
