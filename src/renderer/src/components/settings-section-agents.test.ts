@@ -222,6 +222,7 @@ const labels: Record<string, string> = {
   mcpPermissionDisabledServers: 'Disabled servers',
   mcpPermissionUserServers: 'All-workspace scope',
   mcpPermissionWorkspaceServers: 'Workspace scope',
+  mcpPermissionVisibleServers: 'Workspace-visible only',
   mcpPermissionLocalServers: 'Local commands',
   mcpPermissionRemoteServers: 'HTTP/SSE servers',
   mcpPermissionEnvServers: 'Uses env',
@@ -721,6 +722,7 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
           docs: {
             transport: 'streamable-http',
             url: 'https://mcp.example.com',
+            workspaceRoots: ['/repo/docs'],
             headers: { Authorization: '' },
             trustScope: 'user'
           },
@@ -746,6 +748,7 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
     expect(html).toContain('Disabled servers')
     expect(html).toContain('All-workspace scope')
     expect(html).toContain('Workspace scope')
+    expect(html).toContain('Workspace-visible only')
     expect(html).toContain('Local commands')
     expect(html).toContain('HTTP/SSE servers')
     expect(html).toContain('Uses env')

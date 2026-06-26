@@ -147,6 +147,7 @@ type McpPermissionSummary = {
   disabledServers: number
   userScopeServers: number
   workspaceScopeServers: number
+  workspaceVisibleServers: number
   localServers: number
   remoteServers: number
   envServers: number
@@ -166,6 +167,7 @@ function summarizeMcpPermissionSources(text: string): McpPermissionSummary {
       disabledServers: 0,
       userScopeServers: 0,
       workspaceScopeServers: 0,
+      workspaceVisibleServers: 0,
       localServers: 0,
       remoteServers: 0,
       envServers: 0,
@@ -179,6 +181,9 @@ function summarizeMcpPermissionSources(text: string): McpPermissionSummary {
     disabledServers: parsed.model.servers.length - enabled.length,
     userScopeServers: enabled.filter((server) => server.trustScope === 'user').length,
     workspaceScopeServers: enabled.filter((server) => server.trustScope === 'workspace').length,
+    workspaceVisibleServers: enabled.filter((server) =>
+      server.workspaceRoots.some((root) => root.trim())
+    ).length,
     localServers: enabled.filter((server) => server.transport === 'stdio').length,
     remoteServers: enabled.filter((server) => server.transport !== 'stdio').length,
     envServers: enabled.filter((server) => hasEntries(server.env)).length,
@@ -1131,6 +1136,9 @@ export function AgentsSettingsSection({ ctx }: { ctx: Record<string, any> }): Re
                           </div>
                           <div className="rounded-xl border border-ds-border-muted bg-ds-main/40 px-3 py-2">
                             {t('mcpPermissionWorkspaceServers')}: <span className="font-mono text-ds-ink">{mcpPermissionSummary.workspaceScopeServers}</span>
+                          </div>
+                          <div className="rounded-xl border border-ds-border-muted bg-ds-main/40 px-3 py-2">
+                            {t('mcpPermissionVisibleServers')}: <span className="font-mono text-ds-ink">{mcpPermissionSummary.workspaceVisibleServers}</span>
                           </div>
                           <div className="rounded-xl border border-ds-border-muted bg-ds-main/40 px-3 py-2">
                             {t('mcpPermissionLocalServers')}: <span className="font-mono text-ds-ink">{mcpPermissionSummary.localServers}</span>

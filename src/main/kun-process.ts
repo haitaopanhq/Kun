@@ -665,7 +665,7 @@ function uniqueStrings(values: string[]): string[] {
   return out
 }
 
-async function readGuiManagedMcpServers(path: string): Promise<Record<string, unknown>> {
+async function readGuiManagedMcpServers(path: string): Promise<Record<string, Record<string, unknown>>> {
   const parsed = await readJsonObjectIfExists(path)
   if (!parsed) return {}
 
@@ -700,6 +700,7 @@ function normalizeGuiManagedMcpServer(server: unknown): Record<string, unknown> 
   const transport = normalizeMcpTransport(raw.transport, command, url)
   if (!transport) return null
 
+  const workspaceRoots = stringArrayValue(raw.workspaceRoots)
   const trustedWorkspaceRoots = stringArrayValue(raw.trustedWorkspaceRoots)
   const trustScope = normalizeMcpTrustScope(raw.trustScope, trustedWorkspaceRoots)
   if (trustScope === 'workspace' && trustedWorkspaceRoots.length === 0) return null
@@ -714,6 +715,7 @@ function normalizeGuiManagedMcpServer(server: unknown): Record<string, unknown> 
     ...(url ? { url } : {}),
     ...(Object.keys(headers).length > 0 ? { headers } : {}),
     ...(Object.keys(env).length > 0 ? { env } : {}),
+    ...(workspaceRoots.length > 0 ? { workspaceRoots } : {}),
     trustScope,
     ...(trustedWorkspaceRoots.length > 0 ? { trustedWorkspaceRoots } : {}),
     ...(timeoutMs ? { timeoutMs } : {})

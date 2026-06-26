@@ -101,6 +101,13 @@ type ThreadPreviewState = {
   y: number
 }
 
+type ThreadPreviewAnchorRect = Pick<DOMRect, 'left' | 'right' | 'top' | 'height'>
+
+const THREAD_PREVIEW_WIDTH = 320
+const THREAD_PREVIEW_MAX_HEIGHT = 220
+const THREAD_PREVIEW_GAP = 10
+const THREAD_PREVIEW_VIEWPORT_MARGIN = 12
+
 type SidebarActionDialogState = {
   title: string
   description: string
@@ -119,6 +126,29 @@ export type RenameThreadDialogState = {
 
 const SDD_DRAFT_HISTORY_PAGE_SIZE = 3
 const SDD_DRAFT_HISTORY_LOAD_LIMIT = 40
+
+export function resolveThreadPreviewPosition(
+  anchor: ThreadPreviewAnchorRect,
+  viewport: { width: number; height: number }
+): { x: number; y: number } {
+  const rightX = anchor.right + THREAD_PREVIEW_GAP
+  const leftX = anchor.left - THREAD_PREVIEW_WIDTH - THREAD_PREVIEW_GAP
+  const maxX = Math.max(
+    THREAD_PREVIEW_VIEWPORT_MARGIN,
+    viewport.width - THREAD_PREVIEW_WIDTH - THREAD_PREVIEW_VIEWPORT_MARGIN
+  )
+  const x =
+    rightX + THREAD_PREVIEW_WIDTH <= viewport.width - THREAD_PREVIEW_VIEWPORT_MARGIN
+      ? rightX
+      : Math.max(THREAD_PREVIEW_VIEWPORT_MARGIN, Math.min(leftX, maxX))
+  const idealY = anchor.top + anchor.height / 2 - 28
+  const maxY = Math.max(
+    THREAD_PREVIEW_VIEWPORT_MARGIN,
+    viewport.height - THREAD_PREVIEW_MAX_HEIGHT - THREAD_PREVIEW_VIEWPORT_MARGIN
+  )
+  const y = Math.max(THREAD_PREVIEW_VIEWPORT_MARGIN, Math.min(idealY, maxY))
+  return { x, y }
+}
 
 function isSidebarProjectWorkspacePath(workspacePath: string): boolean {
   const normalized = normalizeWorkspaceRoot(workspacePath)
@@ -789,11 +819,15 @@ export function SidebarProjectsSection({
     worktreeRecord?: SidebarThreadWorktreeRecord
   ): void => {
     if (threadContextMenu || workspaceContextMenu || actionDialog || renameThreadDialog) return
+    const position = resolveThreadPreviewPosition(event.currentTarget.getBoundingClientRect(), {
+      width: window.innerWidth,
+      height: window.innerHeight
+    })
     setThreadPreview({
       thread,
       ...(worktreeRecord ? { worktreeRecord } : {}),
-      x: Math.min(event.clientX + 14, Math.max(16, window.innerWidth - 340)),
-      y: Math.min(event.clientY + 10, Math.max(16, window.innerHeight - 180))
+      x: position.x,
+      y: position.y
     })
   }
 
@@ -1042,7 +1076,6 @@ export function SidebarProjectsSection({
                         onSelect={() => onSelectThread(thread.id)}
                         onContextMenu={(event) => openThreadContextMenu(event, thread)}
                         onPreviewOpen={(event, worktreeRecord) => openThreadPreview(event, thread, worktreeRecord)}
-                        onPreviewMove={(event, worktreeRecord) => openThreadPreview(event, thread, worktreeRecord)}
                         onPreviewClose={closeThreadPreview}
                         onPin={() => void handlePinThread(thread, thread.pinned !== true)}
                         onRename={() => openRenameThreadDialog(thread)}
@@ -1147,7 +1180,6 @@ type ThreadRowProps = {
   onSelect: () => void
   onContextMenu: (event: ReactMouseEvent<HTMLDivElement>) => void
   onPreviewOpen: (event: ReactMouseEvent<HTMLDivElement>, worktreeRecord?: SidebarThreadWorktreeRecord) => void
-  onPreviewMove: (event: ReactMouseEvent<HTMLDivElement>, worktreeRecord?: SidebarThreadWorktreeRecord) => void
   onPreviewClose: () => void
   onPin: () => void
   onRename: () => void
@@ -1295,7 +1327,6 @@ export function ThreadRow({
   onSelect,
   onContextMenu,
   onPreviewOpen,
-  onPreviewMove,
   onPreviewClose,
   onPin,
   onRename,
@@ -1380,7 +1411,6 @@ export function ThreadRow({
       onClick={onSelect}
       onContextMenu={onContextMenu}
       onMouseEnter={(event) => onPreviewOpen(event, worktreeRecord)}
-      onMouseMove={(event) => onPreviewMove(event, worktreeRecord)}
       onMouseLeave={onPreviewClose}
     >
       <span className="flex min-w-0 flex-1 items-center gap-1.5">
@@ -1651,7 +1681,7 @@ function ThreadPreviewCard({
   return (
     <div
       role="tooltip"
-      className="ds-no-drag pointer-events-none fixed z-40 w-[320px] rounded-[18px] border border-ds-border bg-ds-card/95 p-3 text-[13px] text-ds-ink shadow-[0_18px_54px_rgba(20,47,95,0.18)] backdrop-blur-xl dark:bg-ds-card/95"
+      className="ds-no-drag pointer-events-none fixed z-40 max-h-[220px] w-[320px] overflow-hidden rounded-[18px] border border-ds-border bg-ds-card/95 p-3 text-[13px] text-ds-ink shadow-[0_18px_54px_rgba(20,47,95,0.18)] backdrop-blur-xl dark:bg-ds-card/95"
       style={{ left: state.x, top: state.y }}
     >
       <div className="flex items-start gap-2">
