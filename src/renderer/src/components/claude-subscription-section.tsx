@@ -112,7 +112,13 @@ export function ClaudeSubscriptionSection({
       </p>
 
       <div className="flex items-center gap-2 text-[13px]">
-        {status === 'checking' ? (
+        {hasToken ? (
+          // A pasted/captured token authenticates regardless of a local CLI login.
+          <>
+            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" strokeWidth={1.9} />
+            <span className="text-ds-ink">{t('claudeSubStatusToken')}</span>
+          </>
+        ) : status === 'checking' ? (
           <>
             <Loader2 className="h-3.5 w-3.5 animate-spin text-ds-muted" strokeWidth={1.9} />
             <span className="text-ds-muted">{t('claudeSubStatusChecking')}</span>
@@ -148,7 +154,7 @@ export function ClaudeSubscriptionSection({
         ) : (
           <LogIn className="h-4 w-4" strokeWidth={1.9} />
         )}
-        {busy ? t('claudeSubLoginBusy') : t('claudeSubLoginButton')}
+        {busy ? t('claudeSubLoginBusy') : hasToken ? t('claudeSubReloginButton') : t('claudeSubLoginButton')}
       </button>
 
       {message ? (

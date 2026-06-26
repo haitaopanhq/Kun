@@ -43,7 +43,7 @@ export function fetchSdkModels(options: {
   const script = [
     `import { startup } from ${JSON.stringify(SDK_PKG)};`,
     `let out = [];`,
-    `try { const wq = await startup({ options: {} }); try { out = (await wq.supportedModels()) || []; } finally { try { await wq[Symbol.asyncDispose]?.(); } catch {} } } catch {}`,
+    `try { const wq = await startup({ options: {} }); try { await wq.initializationResult?.(); out = (await wq.supportedModels()) || []; } finally { try { await wq[Symbol.asyncDispose]?.(); } catch {} } } catch {}`,
     `process.stdout.write(${JSON.stringify(MARK)} + JSON.stringify(out) + ${JSON.stringify(MARK)});`,
     `process.exit(0);`
   ].join('\n')

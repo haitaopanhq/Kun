@@ -276,6 +276,8 @@
   "claudeSubStatusChecking": "Checking for a local Claude Code login…",
   "claudeSubStatusLoggedIn": "Local Claude Code login detected — the token below can be left empty.",
   "claudeSubStatusLoggedOut": "No local login detected — log in or paste a subscription token.",
+  "claudeSubStatusToken": "Subscription token configured — ready.",
+  "claudeSubReloginButton": "Re-login / refresh token",
   "claudeSubRecheck": "Re-check",
   "claudeSubLoginButton": "Log in / get subscription token",
   "claudeSubLoginBusy": "Complete authorization in your browser…",
