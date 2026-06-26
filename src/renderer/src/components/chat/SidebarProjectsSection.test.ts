@@ -9,6 +9,7 @@ import {
   filterEmptySddAssistantThreadsFromSidebar,
   filterSddDraftHistoryItems,
   mergeSidebarWorkspaceGroupsWithDraftHistory,
+  resolveThreadPreviewPosition,
   sortSidebarThreads,
   SddDraftHistoryRows,
   ThreadRow,
@@ -323,6 +324,24 @@ describe('ThreadRenameDialog', () => {
 })
 
 describe('ThreadRow', () => {
+  it('anchors the preview beside the row instead of following the pointer', () => {
+    expect(
+      resolveThreadPreviewPosition(
+        { left: 20, right: 300, top: 80, height: 34 } as DOMRect,
+        { width: 900, height: 600 }
+      )
+    ).toEqual({ x: 310, y: 69 })
+  })
+
+  it('flips the preview left when the row is close to the right edge', () => {
+    expect(
+      resolveThreadPreviewPosition(
+        { left: 700, right: 780, top: 80, height: 34 } as DOMRect,
+        { width: 900, height: 600 }
+      )
+    ).toEqual({ x: 370, y: 69 })
+  })
+
   it('renders the worktree badge before the truncated title and outside the action buttons', () => {
     const html = renderToStaticMarkup(
       createElement(ThreadRow, {
@@ -345,7 +364,6 @@ describe('ThreadRow', () => {
         onSelect: vi.fn(),
         onContextMenu: vi.fn(),
         onPreviewOpen: vi.fn(),
-        onPreviewMove: vi.fn(),
         onPreviewClose: vi.fn(),
         onPin: vi.fn(),
         onRename: vi.fn(),
@@ -388,7 +406,6 @@ describe('ThreadRow', () => {
         onSelect: vi.fn(),
         onContextMenu: vi.fn(),
         onPreviewOpen: vi.fn(),
-        onPreviewMove: vi.fn(),
         onPreviewClose: vi.fn(),
         onPin: vi.fn(),
         onRename: vi.fn(),
